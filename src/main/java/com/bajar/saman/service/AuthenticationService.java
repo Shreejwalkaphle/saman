@@ -8,6 +8,7 @@ import com.bajar.saman.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.bajar.saman.util.EmailNormalizer;
 
 /**
  * Handles the LOGIN flow — verifying credentials and issuing a JWT.
@@ -52,11 +53,19 @@ public class AuthenticationService {
     @Transactional
     public AuthResponse login(String email, String rawPassword) {
 
+        // Same normalization as registration — a user who registered as
+        // "Test@Example.com" must still be able to log in typing
+        // "test@example.com" (or any case variant). Without this, normalization at
+        // registration alone would actually make things WORSE, not better: it would
+        // silently change what got stored, while login still searched for whatever
+        // raw casing the user happened to type.
+        String normalizedEmail = EmailNormalizer.normalize(email);
+
         // Look up the user by email. Note: we do NOT throw a different exception here
         // vs. a wrong-password case below — both paths converge on the same
         // InvalidCredentialsException, for the email-enumeration reason explained in
         // that exception's own comment.
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(InvalidCredentialsException::new);
 
         // Account lockout check (this column existed since V2 migration, we're now

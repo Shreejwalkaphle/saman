@@ -11,6 +11,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.bajar.saman.util.EmailNormalizer;
 
 @Service
 public class UserRegistrationService {
@@ -36,12 +37,18 @@ public class UserRegistrationService {
     @Transactional
     public User register(String email, String rawPassword) {
 
-        if (userRepository.existsByEmail(email)) {
-            throw new DuplicateEmailException(email);
+        // Normalize FIRST — before the existence check, before hashing, before
+        // constructing the entity. Every downstream use of `email` in this method
+        // must see the normalized form, or the whole point of normalizing is lost.
+        String normalizedEmail = EmailNormalizer.normalize(email);
+
+
+        if (userRepository.existsByEmail(normalizedEmail)) {
+            throw new DuplicateEmailException(normalizedEmail);
         }
 
         String hashedPassword = passwordEncoder.encode(rawPassword);
-        User user = new User(email, hashedPassword);
+        User user = new User(normalizedEmail, hashedPassword);
         try {
             userRepository.save(user);
         } catch (DataIntegrityViolationException e) {
