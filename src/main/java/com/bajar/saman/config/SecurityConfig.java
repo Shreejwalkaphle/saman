@@ -2,6 +2,8 @@ package com.bajar.saman.config;
 
 import com.bajar.saman.security.JwtAuthenticationFilter;
 import com.bajar.saman.security.RateLimitFilter;
+import com.bajar.saman.security.RestAccessDeniedHandler;
+import com.bajar.saman.security.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,12 +32,18 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final RestAuthenticationEntryPoint authenticationEntryPoint;
+    private final RestAccessDeniedHandler accessDeniedHandler;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
-            RateLimitFilter rateLimitFilter) {
+            RateLimitFilter rateLimitFilter,
+            RestAuthenticationEntryPoint authenticationEntryPoint,
+            RestAccessDeniedHandler accessDeniedHandler) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.rateLimitFilter = rateLimitFilter;
+        this.authenticationEntryPoint = authenticationEntryPoint;
+        this.accessDeniedHandler = accessDeniedHandler;
     }
 
     @Bean
@@ -52,6 +60,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .anyRequest().authenticated()
+                )
+                // Tell Spring Security to route BOTH failure scenarios through our own
+                // JSON-based handlers instead of its default (HTML error page /
+                // near-empty response) behavior.
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
                 // STEP 1 first: register JwtAuthenticationFilter's position RELATIVE TO a
 // well-known Spring Security filter class (UsernamePasswordAuthenticationFilter)
