@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.bajar.saman.util.EmailNormalizer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Handles the LOGIN flow — verifying credentials and issuing a JWT.
@@ -25,6 +27,8 @@ public class AuthenticationService {
     // properties or a DB-backed config table) has an obvious place to plug in.
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final long LOCKOUT_DURATION_MINUTES = 15;
+
+    private static final Logger log = LoggerFactory.getLogger(AuthenticationService.class);
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -74,6 +78,7 @@ public class AuthenticationService {
         // want a locked account to still be usable just because someone eventually
         // got the password right.
         if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(java.time.LocalDateTime.now())) {
+            log.warn("Login attempt rejected — account locked until {} for email: {}",user.getLockedUntil(), email);
             throw new InvalidCredentialsException();
         }
 
@@ -84,6 +89,13 @@ public class AuthenticationService {
         boolean passwordMatches = passwordEncoder.matches(rawPassword, user.getPasswordHash());
 
         if (!passwordMatches) {
+            // WARN, not ERROR — this is an expected, routine occurrence (people
+            // mistype passwords constantly), not an application malfunction. We log
+            // the email but deliberately NOT the attempted password (obviously —
+            // logging raw credentials, even failed ones, is itself a security
+            // anti-pattern many real breaches trace back to).
+            log.warn("Failed login attempt for email: {}", email);
+
             // Delegates to LoginAttemptService's own independent transaction — see
             // that class for why this can't just be inline code in this method.
             loginAttemptService.recordFailedAttempt(user);

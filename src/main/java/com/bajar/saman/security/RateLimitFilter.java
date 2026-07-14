@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Enforces per-IP rate limits on the two brute-force-sensitive auth endpoints
@@ -29,6 +31,8 @@ import java.util.function.Supplier;
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
 
     private final ProxyManager<byte[]> proxyManager;
 
@@ -111,6 +115,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean allowed = bucket.tryConsume(1);
 
         if (!allowed) {
+            // INFO level, not WARN/ERROR — hitting a rate limit is routine, expected
+            // protective behavior working as designed, not a malfunction. Useful for
+            // spotting patterns later (e.g. one IP repeatedly triggering this is
+            // worth a closer look), but shouldn't clutter WARN/ERROR-level alerts.
+            log.info("Rate limit exceeded for IP {} on {}", clientIp, path);
+
             // 429 Too Many Requests — the HTTP-correct status code for rate limiting.
             //
             // We hand-build this JSON response here instead of routing through

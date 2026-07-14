@@ -7,6 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -23,6 +25,11 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    // One Logger per class is the standard SLF4J convention — getLogger(Class) ties
+    // every log line from this class to its exact source, so log output (or a log
+    // aggregation tool later) can be filtered/searched by class name.
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // Registration attempted with an email that already exists -> 409 Conflict
     // (the HTTP-correct status for "this resource already exists").
@@ -65,6 +72,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(
             Exception ex, HttpServletRequest request) {
+        // log.error(message, throwable) — passing the exception object itself (not
+        // just ex.getMessage()) makes Logback print the FULL stack trace to the
+        // server console/log file. This is exactly the detail we deliberately keep
+        // OUT of the client-facing response (see this method's own reasoning below)
+        // but need SOMEWHERE for us to actually debug it. Without this line, an
+        // unexpected error was previously invisible outside a live debugger session.
+        log.error("Unhandled exception on {} {}", request.getMethod(), request.getRequestURI(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", request);
     }
 
