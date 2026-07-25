@@ -59,6 +59,24 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Browsing the catalog (viewing categories/products) must work
+                        // WITHOUT being logged in — a customer shouldn't need an account
+                        // just to look around. Only GET requests to these paths are
+                        // public; POST/PUT/DELETE on the same paths still fall through
+                        // to anyRequest().authenticated() below.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/categories/**", "/api/products/**").permitAll()
+                        // KNOWN GAP (tracked in PROGRESS.md): this only requires SOME
+                        // authenticated user for create/update endpoints — not
+                        // specifically an ADMIN. Any logged-in CUSTOMER can currently
+                        // create categories/products. Closing this requires ABAC/role-
+                        // based @PreAuthorize rules, which are a deliberately deferred
+                        // item from the Auth module audit — will be closed once that's
+                        // built, not before.
+                        // Uploaded product images must be viewable without login —
+                        // same public-browsing reasoning as GET on /api/products above.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/uploads/products/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 // Tell Spring Security to route BOTH failure scenarios through our own

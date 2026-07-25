@@ -115,11 +115,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // specific prefix is what lets us later write hasRole("CUSTOMER") in
         // @PreAuthorize annotations — Spring strips "ROLE_" automatically when you use
         // hasRole(), so we must add it ourselves here for that shorthand to work later.
-        List<UserRole> userRoles = userRoleRepository.findByUser_Id(userId);
+        //
+        // Deliberately using findRoleNamesByUserId (a direct JOIN query returning
+        // Strings) instead of findByUser_Id + lazy Role access here — the latter
+        // caused a LazyInitializationException ("no session") once this filter
+        // actually ran against a real protected endpoint for the first time. Each
+        // repository call opens and closes its own short-lived session; by the time
+        // this filter tried to touch the lazy Role field afterward, that session was
+        // already gone. Doing the join in the query itself avoids ever needing a
+        // still-open session after the query returns.
+        List<String> roleNames = userRoleRepository.findRoleNamesByUserId(userId);
 
-        List<GrantedAuthority> authorities = userRoles.stream()
-                .map(UserRole::getRole)               // UserRole -> Role
-                .map(Role::getName)                    // Role -> "CUSTOMER" / "ADMIN" / etc.
+        List<GrantedAuthority> authorities = roleNames.stream()
                 .map(roleName -> new SimpleGrantedAuthority("ROLE_" + roleName))
                 .collect(Collectors.toList());
 
