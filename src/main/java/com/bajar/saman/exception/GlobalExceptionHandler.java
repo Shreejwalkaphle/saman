@@ -46,6 +46,20 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 
+    // Covers business-rule validation failures that happen OUTSIDE the @Valid/DTO
+    // layer — i.e. checks that require more than a simple annotation, done inside
+    // a service method (e.g. LocalImageStorageService rejecting an oversized/wrong-
+    // type file, ProductService rejecting a negative price). Both
+    // IllegalArgumentException and InvalidProductDataException represent the same
+    // underlying situation ("the client's input is invalid," not "something broke
+    // on our end") so they share this one handler and both correctly map to 400,
+    // not the misleading 500 they were falling through to before this fix.
+    @ExceptionHandler({IllegalArgumentException.class, com.bajar.saman.exception.InvalidProductDataException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidInput(
+            RuntimeException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
     // Triggered automatically when a @Valid-annotated request body fails its
     // @NotBlank / @Email / @Size checks (from RegisterRequest/LoginRequest) -> 400.
     // We collect ALL field errors into one readable string rather than just the
