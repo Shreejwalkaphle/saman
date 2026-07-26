@@ -1,0 +1,75 @@
+package com.bajar.saman.controller;
+
+import com.bajar.saman.dto.OrderResponse;
+import com.bajar.saman.entity.Order;
+import com.bajar.saman.entity.User;
+import com.bajar.saman.service.OrderService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/orders")
+public class OrderController {
+
+    private final OrderService orderService;
+
+    public OrderController(OrderService orderService) {
+        this.orderService = orderService;
+    }
+
+    /**
+     * POST /api/orders/checkout
+     *
+     * The idempotency key comes from a REQUIRED custom header, "Idempotency-Key" —
+     * not the request body. This matches industry convention (Stripe and similar
+     * payment/checkout APIs do the same) since the key is request METADATA, not
+     * business data — the actual order content comes entirely from the user's
+     * current server-side cart, nothing else needs to be in the body at all.
+     *
+     * required = true: a checkout request with NO idempotency key is rejected
+     * outright (400, via Spring's own MissingRequestHeaderException, already
+     * covered generically by GlobalExceptionHandler's catch-all — a dedicated
+     * handler could be added later if a more specific message is wanted). This is
+     * deliberate: silently proceeding without a key would defeat the entire
+     * purpose of the feature — better to fail loudly than to accept an insecure
+     * checkout request.
+     */
+    @PostMapping("/checkout")
+    public ResponseEntity<OrderResponse> checkout(
+            @AuthenticationPrincipal User user,
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey) {
+
+        Order order = orderService.checkout(user, idempotencyKey);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(order));
+    }
+
+    @GetMapping
+    public ResponseEntity<List<OrderResponse>> getMyOrders(@AuthenticationPrincipal User user) {
+        List<OrderResponse> response = orderService.getOrdersForUser(user)
+                .stream().map(this::toResponse).toList();
+        return ResponseEntity.ok(response);
+    }
+
+    private OrderResponse toResponse(Order order) {
+        List<OrderResponse.OrderItemResponse> items = order.getItems().stream()
+                .map(item -> new OrderResponse.OrderItemResponse(
+                        item.getProduct().getId(),
+                        item.getProductName(),
+                        item.getPriceAtPurchase(),
+                        item.getQuantity()))
+                .toList();
+
+        return new OrderResponse(
+                order.getId(),
+                order.getStatus().name(),
+                order.getTotalAmount(),
+                order.getCreatedAt(),
+                items
+        );
+    }
+}

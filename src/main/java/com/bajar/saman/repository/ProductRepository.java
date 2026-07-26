@@ -10,6 +10,25 @@ import java.util.UUID;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
 
+    /**
+     * THE pessimistic-locking method roadmap doc Section 5 called for by name —
+     * "pessimistic locking inventory-decrement path to prevent overselling during
+     * checkout." @Lock(PESSIMISTIC_WRITE) translates to Postgres's
+     * `SELECT ... FOR UPDATE` — this makes any OTHER transaction that tries to
+     * read (with a lock) or write this same product row BLOCK until this
+     * transaction commits or rolls back. This is deliberately a DIFFERENT
+     * mechanism from Product's own @Version optimistic locking (used everywhere
+     * else, e.g. ProductService.updatePrice): optimistic locking lets two
+     * transactions proceed concurrently and only fails one of them AFTER the
+     * fact if they conflict; pessimistic locking here PREVENTS the second
+     * transaction from even reading the row until the first is done — the
+     * stronger guarantee needed specifically for "don't let two simultaneous
+     * checkouts both think there's enough stock when there isn't."
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM Product p WHERE p.id = :id")
+    Optional<Product> findByIdForCheckout(@org.springframework.data.repository.query.Param("id") UUID id);
+
     Optional<Product> findBySlug(String slug);
 
     boolean existsBySku(String sku);

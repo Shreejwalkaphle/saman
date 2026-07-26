@@ -54,10 +54,28 @@ public class GlobalExceptionHandler {
     // underlying situation ("the client's input is invalid," not "something broke
     // on our end") so they share this one handler and both correctly map to 400,
     // not the misleading 500 they were falling through to before this fix.
-    @ExceptionHandler({IllegalArgumentException.class, com.bajar.saman.exception.InvalidProductDataException.class})
+    @ExceptionHandler({
+            IllegalArgumentException.class,
+            com.bajar.saman.exception.InvalidProductDataException.class,
+            com.bajar.saman.exception.InsufficientStockException.class
+    })
     public ResponseEntity<ErrorResponse> handleInvalidInput(
             RuntimeException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+    // A required multipart part (e.g. the "file" field on an image upload) was
+    // missing from the request entirely — a Spring-framework-level exception
+    // thrown before the controller method body even runs, so it needs its own
+    // handler rather than falling under the service-level exceptions above. Still
+    // fundamentally a client-input problem (they forgot to attach the file, or a
+    // form field was misnamed), so still 400, not 500. Closes the gap flagged
+    // during the ProductImageController debugging session (Lessons Learned #5).
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException ex,
+            HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST,
+                "Required request part is missing: " + ex.getRequestPartName(), request);
     }
 
     // Triggered automatically when a @Valid-annotated request body fails its
