@@ -55,6 +55,14 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
+                // Wires the CorsConfigurationSource bean (defined in CorsConfig)
+                // into Spring Security's own filter chain — without this line,
+                // Spring Security processes requests BEFORE Spring MVC's own CORS
+                // handling would ever run, and CORS preflight (OPTIONS) requests
+                // get rejected by the authorization rules below before they ever
+                // reach the point where "this is just a CORS preflight, allow it"
+                // would normally be recognized.
+                .cors(cors -> {})
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
