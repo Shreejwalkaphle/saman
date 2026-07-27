@@ -37,6 +37,16 @@ public class Order extends Auditable {
     @Column(name = "idempotency_key", nullable = false, unique = true)
     private UUID idempotencyKey;
 
+    // Added when the Payment module was built (V11 migration) — see that
+    // migration's comment for why this was late (Order predates the Payment
+    // module's requirements being fully worked out) and why the delay caused no
+    // data problem (added before any real payment data existed to backfill).
+    @Column(name = "currency", nullable = false, length = 3)
+    private String currency = "NPR";
+
+    @Column(name = "exchange_rate_snapshot", precision = 12, scale = 6)
+    private java.math.BigDecimal exchangeRateSnapshot;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -62,6 +72,8 @@ public class Order extends Auditable {
     public OrderStatus getStatus() { return status; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public UUID getIdempotencyKey() { return idempotencyKey; }
+    public String getCurrency() { return currency; }
+    public java.math.BigDecimal getExchangeRateSnapshot() { return exchangeRateSnapshot; }
     public Long getVersion() { return version; }
     public List<OrderItem> getItems() { return items; }
 
