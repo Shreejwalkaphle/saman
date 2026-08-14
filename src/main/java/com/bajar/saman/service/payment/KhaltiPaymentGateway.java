@@ -33,6 +33,8 @@ public class KhaltiPaymentGateway implements PaymentGateway {
     public PaymentVerificationResult verify(String gatewayReference) {
         // REAL IMPLEMENTATION: Khalti's lookup API, server-to-server, same
         // "never trust a client-side redirect param alone" reasoning as eSewa.
-        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS");
+        // amountReceived null in simulation — see EsewaPaymentGateway's
+        // identical comment for why, and what a real implementation must do.
+        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS", null);
     }
 }

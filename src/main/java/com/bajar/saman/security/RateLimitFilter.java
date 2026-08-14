@@ -71,6 +71,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     .refillGreedy(3, Duration.ofHours(1))
                     .build();
             bucketPrefix = "rl:register:";
+        }
+        else if (path.equals("/api/orders/checkout")) {
+            // Closes a MEDIUM gap tracked in PROGRESS.md (§6): checkout was
+            // previously unprotected. 10/minute — generous for a legitimate
+            // shopper (checkout isn't something anyone does rapidly in a
+            // real session) but blocks scripted abuse of a money-moving
+            // endpoint.
+            bandwidth = Bandwidth.builder()
+                    .capacity(10)
+                    .refillGreedy(10, Duration.ofMinutes(1))
+                    .build();
+            bucketPrefix = "rl:checkout:";
+        } else if (path.equals("/api/payments/initiate")) {
+            // Tighter than checkout — flagged in the original audit as
+            // arguably HIGHER priority than Auth's own rate limits, since
+            // abuse here could incur real per-call gateway costs once a
+            // real gateway is connected, not just server load.
+            bandwidth = Bandwidth.builder()
+                    .capacity(5)
+                    .refillGreedy(5, Duration.ofMinutes(1))
+                    .build();
+            bucketPrefix = "rl:payment-initiate:";
         } else {
             // Any endpoint OTHER than these two skips this filter entirely — cheap
             // check, avoids an unnecessary Redis round trip on every single request

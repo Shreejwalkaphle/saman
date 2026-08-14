@@ -4,6 +4,7 @@ import com.bajar.saman.entity.ProductImage;
 import com.bajar.saman.service.ProductImageService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +25,7 @@ public class ProductImageController {
     // file upload (multipart/form-data), not JSON — without this, Spring wouldn't
     // know how to bind the incoming request into a MultipartFile parameter.
     @PostMapping(consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ProductImageResponse> upload(
             @PathVariable UUID productId,
             @RequestParam("file") MultipartFile file,

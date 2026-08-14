@@ -63,6 +63,27 @@ public class GlobalExceptionHandler {
             RuntimeException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
+
+    // @PreAuthorize rejections throw AuthorizationDeniedException — this is a
+    // DIFFERENT mechanism from RestAccessDeniedHandler (wired via
+    // SecurityConfig's .exceptionHandling()), which only catches rejections
+    // from the FILTER CHAIN (e.g. Spring Security's own
+    // anyRequest().authenticated() check). @PreAuthorize is a Spring AOP
+    // method interceptor that runs INSIDE the controller method call, after
+    // the filter chain has already let the request through — so its
+    // rejections land here, in @RestControllerAdvice, not in
+    // RestAccessDeniedHandler. This was flagged as an untested boundary in
+    // the Auth module design doc ("no protected non-ADMIN endpoint existed
+    // yet to hit") — this is that gap surfacing for the first time, now that
+    // ProductController/CategoryController actually use @PreAuthorize.
+    @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAuthorizationDenied(
+            org.springframework.security.authorization.AuthorizationDeniedException ex,
+            HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN,
+                "You do not have permission to perform this action", request);
+    }
+
     // A required multipart part (e.g. the "file" field on an image upload) was
     // missing from the request entirely — a Spring-framework-level exception
     // thrown before the controller method body even runs, so it needs its own

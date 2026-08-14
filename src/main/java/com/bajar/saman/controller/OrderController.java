@@ -42,10 +42,34 @@ public class OrderController {
     @PostMapping("/checkout")
     public ResponseEntity<OrderResponse> checkout(
             @AuthenticationPrincipal User user,
-            @RequestHeader("Idempotency-Key") UUID idempotencyKey) {
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey,
+            @jakarta.validation.Valid @RequestBody com.bajar.saman.dto.ShippingAddressRequest shippingAddress) {
 
-        Order order = orderService.checkout(user, idempotencyKey);
+        Order order = orderService.checkout(user, idempotencyKey, shippingAddress);
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(order));
+    }
+
+    /**
+     * Admin-facing shipping endpoints. @PreAuthorize matches the same
+     * ADMIN-only pattern established for Catalog mutation (Category/Product
+     * controllers) — shipping/delivery status changes are exactly the kind
+     * of admin action that pattern exists for.
+     */
+    @PatchMapping("/{orderId}/ship")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<OrderResponse> ship(
+            @PathVariable UUID orderId,
+            @RequestParam String deliveryPartner,
+            @RequestParam String trackingNumber) {
+        Order order = orderService.shipOrder(orderId, deliveryPartner, trackingNumber);
+        return ResponseEntity.ok(toResponse(order));
+    }
+
+    @PatchMapping("/{orderId}/deliver")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<OrderResponse> deliver(@PathVariable UUID orderId) {
+        Order order = orderService.markDelivered(orderId);
+        return ResponseEntity.ok(toResponse(order));
     }
 
     @GetMapping
@@ -69,7 +93,11 @@ public class OrderController {
                 order.getStatus().name(),
                 order.getTotalAmount(),
                 order.getCreatedAt(),
-                items
+                items,
+                order.getShippingCity(),
+                order.getTrackingNumber(),
+                order.getShippedAt(),
+                order.getDeliveredAt()
         );
     }
 }
