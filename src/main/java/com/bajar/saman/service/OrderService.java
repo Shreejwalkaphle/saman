@@ -1,5 +1,6 @@
 package com.bajar.saman.service;
 
+import com.bajar.saman.dto.ShippingAddressRequest;
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.*;
 import com.bajar.saman.repository.CartItemRepository;
@@ -39,7 +40,7 @@ public class OrderService {
      * their job.
      */
     @Transactional
-    public Order checkout(User user, UUID idempotencyKey) {
+    public Order checkout(User user, UUID idempotencyKey, ShippingAddressRequest shippingAddress) {
 
         // ---- STEP 1: Idempotency check — MUST be first, before anything else ----
         // If a request with this exact key already succeeded (e.g. the client's
@@ -79,6 +80,19 @@ public class OrderService {
             Product product = productRepository.findByIdForCheckout(cartItem.getProduct().getId())
                     .orElseThrow(() -> new ProductNotFoundException(cartItem.getProduct().getId().toString()));
 
+            // Closes gap #2 tracked in PROGRESS.md (§6, HIGH priority):
+            // re-checking stock alone was insufficient — a product an admin
+            // deactivated AFTER it was added to a cart still had a valid
+            // stock count and could still be checked out. This check runs
+            // under the SAME pessimistic lock already acquired above
+            // (findByIdForCheckout), so it's consistent with a concurrent
+            // admin deactivation the same way the stock check already is —
+            // no separate locking concern introduced.
+            if (!product.isActive()) {
+                throw new InvalidProductDataException(
+                        "'" + product.getName() + "' is no longer available for purchase");
+            }
+
             if (product.getStockQuantity() < cartItem.getQuantity()) {
                 // Re-check stock HERE, at checkout time, even though CartService
                 // already soft-checked it at add-to-cart time. Time has passed
@@ -111,6 +125,14 @@ public class OrderService {
         // package-private/internal setter for this one case (see Order.java note
         // below) rather than fight the entity's own immutability conventions.
         order.setTotalAmount(total);
+        // Address is captured here, at order-creation time, snapshotted onto
+        // the Order itself — see V14 migration's comment for why this isn't
+        // a live reference to a user profile address (which doesn't exist
+        // yet anyway — deliberately deferred "saved addresses" feature).
+        order.setShippingAddress(
+                shippingAddress.addressLine1(), shippingAddress.addressLine2(),
+                shippingAddress.city(), shippingAddress.district(),
+                shippingAddress.postalCode(), shippingAddress.phone());
 
         Order savedOrder = orderRepository.save(order);
 
@@ -125,5 +147,41 @@ public class OrderService {
     @Transactional(readOnly = true)
     public List<Order> getOrdersForUser(User user) {
         return orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+    }
+
+    /**
+     * Admin-facing: marks an order as shipped. Only valid from PAID status —
+     * shipping an unpaid order (or re-shipping an already-shipped one) is a
+     * business-rule violation, not a technical error, hence
+     * InvalidProductDataException (same exception type used for other
+     * business-rule violations throughout this project, e.g.
+     * ProductService's price/stock validation).
+     */
+    @Transactional
+    public Order shipOrder(UUID orderId, String deliveryPartner, String trackingNumber) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId.toString()));
+
+        if (order.getStatus() != OrderStatus.PAID) {
+            throw new InvalidProductDataException(
+                    "Order must be PAID before it can be shipped (current status: " + order.getStatus() + ")");
+        }
+
+        order.markShipped(deliveryPartner, trackingNumber);
+        return order; // dirty-checking persists the change
+    }
+
+    @Transactional
+    public Order markDelivered(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId.toString()));
+
+        if (order.getStatus() != OrderStatus.SHIPPED) {
+            throw new InvalidProductDataException(
+                    "Order must be SHIPPED before it can be marked delivered (current status: " + order.getStatus() + ")");
+        }
+
+        order.markDelivered();
+        return order;
     }
 }

@@ -7,6 +7,7 @@ import com.bajar.saman.service.CategoryService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +24,13 @@ public class CategoryController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    // Closes the gap tracked since the Auth module audit: previously ANY
+    // authenticated user (any role) could create categories. hasRole('ADMIN')
+    // checks for authority "ROLE_ADMIN" — the "ROLE_" prefix is added
+    // automatically by hasRole() (JwtAuthenticationFilter already stores
+    // authorities WITH that prefix, e.g. "ROLE_CUSTOMER" — see that filter's
+    // own comment on why the prefix is added there).
     public ResponseEntity<CategoryResponse> create(@Valid @RequestBody CreateCategoryRequest request) {
         Category category = categoryService.createCategory(
                 request.name(), request.description(), request.parentId());

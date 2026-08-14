@@ -36,6 +36,6 @@ public class StripePaymentGateway implements PaymentGateway {
 
     @Override
     public PaymentVerificationResult verify(String gatewayReference) {
-        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS");
+        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS", null);
     }
 }

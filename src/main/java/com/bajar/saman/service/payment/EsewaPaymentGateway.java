@@ -50,6 +50,15 @@ public class EsewaPaymentGateway implements PaymentGateway {
         // verification call is a mandatory security step for any real
         // implementation of this method — noted here so this isn't accidentally
         // skipped when the simulation is later replaced with a real call).
-        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS");
+        //
+        // amountReceived is NULL in this simulation — there is no real
+        // transaction to report an actual received amount for. PaymentService
+        // deliberately SKIPS the amount-match check when this is null (see
+        // its own comment), so the simulated flow keeps working exactly as
+        // before. A REAL implementation of this method MUST populate this
+        // field with the actual amount eSewa confirms was received — leaving
+        // it null there would silently disable the verification this field
+        // exists for.
+        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS", null);
     }
 }

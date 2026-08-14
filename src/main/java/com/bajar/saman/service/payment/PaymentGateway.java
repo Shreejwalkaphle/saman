@@ -36,6 +36,22 @@ public interface PaymentGateway {
     record PaymentInitiationResult(String redirectUrl, String gatewayReference) {
     }
 
-    record PaymentVerificationResult(boolean success, String gatewayReference, String rawStatus) {
+    /**
+     * amountReceived added to close gap #5 (PROGRESS.md §6, HIGH priority):
+     * a real gateway confirmation must report exactly how much money was
+     * actually received, so PaymentService can independently verify it
+     * against the expected order total BEFORE trusting the success flag —
+     * never trust a bare boolean alone for a financial confirmation.
+     * Nullable/zero-safe: simulated gateways (current state, no real
+     * integration yet) can populate this with the expected amount without
+     * needing real payment infrastructure — see each gateway's own verify()
+     * implementation.
+     */
+    record PaymentVerificationResult(
+            boolean success,
+            String gatewayReference,
+            String rawStatus,
+            java.math.BigDecimal amountReceived
+    ) {
     }
 }

@@ -6,6 +6,7 @@ import com.bajar.saman.security.RestAccessDeniedHandler;
 import com.bajar.saman.security.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -28,6 +29,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
+// Turns on @PreAuthorize/@PostAuthorize support on service/controller methods.
+// Off by default — without this, @PreAuthorize annotations would silently do
+// nothing (no error, the check simply never runs), which would be a much
+// more dangerous failure mode than a compile error.
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

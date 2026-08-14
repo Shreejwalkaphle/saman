@@ -10,7 +10,11 @@ public record OrderResponse(
         String status,
         BigDecimal totalAmount,
         LocalDateTime createdAt,
-        List<OrderItemResponse> items
+        List<OrderItemResponse> items,
+        String shippingCity,
+        String trackingNumber,
+        LocalDateTime shippedAt,
+        LocalDateTime deliveredAt
 ) {
     // Nested record — same reasoning as ProductImageController's inline DTO:
     // small, single-use, tightly coupled to OrderResponse specifically, doesn't

@@ -47,6 +47,36 @@ public class Order extends Auditable {
     @Column(name = "exchange_rate_snapshot", precision = 12, scale = 6)
     private java.math.BigDecimal exchangeRateSnapshot;
 
+    @Column(name = "shipping_address_line1", length = 255)
+    private String shippingAddressLine1;
+
+    @Column(name = "shipping_address_line2", length = 255)
+    private String shippingAddressLine2;
+
+    @Column(name = "shipping_city", length = 100)
+    private String shippingCity;
+
+    @Column(name = "shipping_district", length = 100)
+    private String shippingDistrict;
+
+    @Column(name = "shipping_postal_code", length = 20)
+    private String shippingPostalCode;
+
+    @Column(name = "shipping_phone", length = 20)
+    private String shippingPhone;
+
+    @Column(name = "delivery_partner", length = 50)
+    private String deliveryPartner;
+
+    @Column(name = "tracking_number", length = 100)
+    private String trackingNumber;
+
+    @Column(name = "shipped_at")
+    private java.time.LocalDateTime shippedAt;
+
+    @Column(name = "delivered_at")
+    private java.time.LocalDateTime deliveredAt;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -74,6 +104,38 @@ public class Order extends Auditable {
     public UUID getIdempotencyKey() { return idempotencyKey; }
     public String getCurrency() { return currency; }
     public java.math.BigDecimal getExchangeRateSnapshot() { return exchangeRateSnapshot; }
+    public String getShippingAddressLine1() { return shippingAddressLine1; }
+    public String getShippingAddressLine2() { return shippingAddressLine2; }
+    public String getShippingCity() { return shippingCity; }
+    public String getShippingDistrict() { return shippingDistrict; }
+    public String getShippingPostalCode() { return shippingPostalCode; }
+    public String getShippingPhone() { return shippingPhone; }
+    public String getDeliveryPartner() { return deliveryPartner; }
+    public String getTrackingNumber() { return trackingNumber; }
+    public java.time.LocalDateTime getShippedAt() { return shippedAt; }
+    public java.time.LocalDateTime getDeliveredAt() { return deliveredAt; }
+
+    public void setShippingAddress(String line1, String line2, String city,
+                                   String district, String postalCode, String phone) {
+        this.shippingAddressLine1 = line1;
+        this.shippingAddressLine2 = line2;
+        this.shippingCity = city;
+        this.shippingDistrict = district;
+        this.shippingPostalCode = postalCode;
+        this.shippingPhone = phone;
+    }
+
+    public void markShipped(String deliveryPartner, String trackingNumber) {
+        this.deliveryPartner = deliveryPartner;
+        this.trackingNumber = trackingNumber;
+        this.shippedAt = java.time.LocalDateTime.now();
+        this.status = OrderStatus.SHIPPED;
+    }
+
+    public void markDelivered() {
+        this.deliveredAt = java.time.LocalDateTime.now();
+        this.status = OrderStatus.DELIVERED;
+    }
     public Long getVersion() { return version; }
     public List<OrderItem> getItems() { return items; }
 
