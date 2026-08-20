@@ -24,6 +24,13 @@ public record RegisterRequest(
 
         @NotBlank(message = "Password is required")
         @Size(min = 8, message = "Password must be at least 8 characters")
-        String password
+        String password,
+
+        // Roadmap Addendum v2 §1.2: opt-in at signup. false/absent = regular
+        // customer only (unchanged existing behavior). true = also applies
+        // for SELLER access, entering PENDING_APPROVAL — the account is
+        // fully usable as a CUSTOMER immediately either way; only seller
+        // capability (product/category creation) is gated pending approval.
+        boolean asSeller
 ) {
 }
