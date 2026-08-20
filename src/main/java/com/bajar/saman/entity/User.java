@@ -37,6 +37,10 @@ public class User extends Auditable {
     @Column(name = "mfa_secret", length = 255)
     private String mfaSecret;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "seller_status", length = 20)
+    private SellerStatus sellerStatus; // null = never applied to sell
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -60,6 +64,11 @@ public class User extends Auditable {
     public boolean isMfaEnabled() { return mfaEnabled; }
     public String getMfaSecret() { return mfaSecret; }
     public Long getVersion() { return version; }
+    public SellerStatus getSellerStatus() { return sellerStatus; }
+
+    public void setSellerStatus(SellerStatus sellerStatus) {
+        this.sellerStatus = sellerStatus;
+    }
 
     // --- Setters (matra tinai field ko lagi jun application logic le change garne ho) ---
     public void setEmail(String email) { this.email = email; }

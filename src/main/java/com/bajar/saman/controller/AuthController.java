@@ -4,16 +4,15 @@ import com.bajar.saman.dto.AuthResponse;
 import com.bajar.saman.dto.LoginRequest;
 import com.bajar.saman.dto.RegisterRequest;
 import com.bajar.saman.entity.User;
+import com.bajar.saman.repository.UserRoleRepository;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.bajar.saman.security.JwtService;
 import com.bajar.saman.service.AuthenticationService;
 import com.bajar.saman.service.UserRegistrationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * The ONLY layer that talks HTTP. Notice this class contains NO business logic —
@@ -31,14 +30,17 @@ public class AuthController {
     private final UserRegistrationService registrationService;
     private final AuthenticationService authenticationService;
     private final JwtService jwtService;
+    private final UserRoleRepository userRoleRepository;
 
     public AuthController(
             UserRegistrationService registrationService,
             AuthenticationService authenticationService,
-            JwtService jwtService) {
+            JwtService jwtService,
+            UserRoleRepository userRoleRepository) {
         this.registrationService = registrationService;
         this.authenticationService = authenticationService;
         this.jwtService = jwtService;
+        this.userRoleRepository = userRoleRepository;
     }
 
     /**
@@ -51,7 +53,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
 
-        User user = registrationService.register(request.email(), request.password());
+        User user = registrationService.register(request.email(), request.password(), request.asSeller());
 
         // Registration doesn't currently issue a token via AuthenticationService
         // (that would mean re-verifying a password we just set, which is redundant) —
@@ -73,5 +75,25 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authenticationService.login(request.email(), request.password());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Roadmap Addendum v2 §3: the frontend needs a way to know the logged-in
+     * user's roles (JWT deliberately doesn't carry them — see JwtService's
+     * own comment on why roles are always re-fetched from the DB, not
+     * embedded in the token). This endpoint is that source: the frontend
+     * calls it once after login/on app load to know what to show/hide.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<com.bajar.saman.dto.UserProfileResponse> me(@AuthenticationPrincipal User user) {
+        // Now uses the field injected via the constructor above — no more
+        // per-method @Autowired parameter (that pattern doesn't work
+        // cleanly alongside @AuthenticationPrincipal, as the earlier error
+        // showed: Spring tried to bind UserRoleRepository as a request-body
+        // form object instead of resolving it as a dependency).
+        java.util.List<String> roles = userRoleRepository.findRoleNamesByUserId(user.getId());
+        return ResponseEntity.ok(new com.bajar.saman.dto.UserProfileResponse(
+                user.getId(), user.getEmail(), roles,
+                user.getSellerStatus() != null ? user.getSellerStatus().name() : null));
     }
 }
