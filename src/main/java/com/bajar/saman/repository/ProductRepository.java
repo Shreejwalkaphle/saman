@@ -31,6 +31,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     Optional<Product> findBySlug(String slug);
 
+    Optional<Product> findBySlugAndActiveTrue(String slug);
+
     boolean existsBySku(String sku);
 
     // Pageable in, Page<Product> out — this is the core pagination pattern. The
@@ -52,4 +54,6 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     // All active products, no category filter — for a general "browse everything"
     // storefront view.
     Page<Product> findByActiveTrue(Pageable pageable);
+
+    Page<Product> findBySellerId(UUID sellerId, Pageable pageable);
 }

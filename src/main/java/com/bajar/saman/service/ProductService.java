@@ -8,7 +8,6 @@ import com.bajar.saman.exception.InvalidProductDataException;
 import com.bajar.saman.exception.ProductNotFoundException;
 import com.bajar.saman.repository.CategoryRepository;
 import com.bajar.saman.repository.ProductRepository;
-import com.bajar.saman.repository.UserRoleRepository;
 import com.bajar.saman.util.SlugGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,13 +22,13 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final ProductAuthorizationPolicy authorizationPolicy;
 
     public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-                          UserRoleRepository userRoleRepository) {
+                          ProductAuthorizationPolicy authorizationPolicy) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
-        this.userRoleRepository = userRoleRepository;
+        this.authorizationPolicy = authorizationPolicy;
     }
 
     @Transactional
@@ -37,11 +36,8 @@ public class ProductService {
             com.bajar.saman.entity.User actor, UUID categoryId, String name, String description,
             BigDecimal price, String sku, int stockQuantity) {
 
-        boolean admin = isAdmin(actor);
-        if (!admin && actor.getSellerStatus() != com.bajar.saman.entity.SellerStatus.APPROVED) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Only administrators or approved sellers can create products");
-        }
+        authorizationPolicy.requireCanCreate(actor);
+        boolean admin = authorizationPolicy.isAdmin(actor);
 
         // Validate business rules BEFORE touching the database at all — same
         // "fail fast, cheaply" pattern as UserRegistrationService's
@@ -67,7 +63,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Product getProductBySlug(String slug) {
-        return productRepository.findBySlug(slug)
+        return productRepository.findBySlugAndActiveTrue(slug)
                 .orElseThrow(() -> new ProductNotFoundException(slug));
     }
 
@@ -88,7 +84,7 @@ public class ProductService {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId.toString()));
 
-        requireOwnerOrAdmin(actor, product);
+        authorizationPolicy.requireCanManage(actor, product);
 
         // No manual save() call needed here — this is "dirty checking," a core
         // Hibernate/JPA behavior we haven't explicitly relied on yet in this
@@ -130,6 +126,43 @@ public class ProductService {
         // will be built when Cart/Checkout module is reached, not here.
     }
 
+    @Transactional(readOnly = true)
+    public Page<Product> listOwnedProducts(com.bajar.saman.entity.User seller, Pageable pageable) {
+        authorizationPolicy.requireApprovedSeller(seller);
+        return productRepository.findBySellerId(seller.getId(), pageable);
+    }
+
+    @Transactional
+    public Product updateProduct(com.bajar.saman.entity.User actor, UUID productId,
+                                 UUID categoryId, String name, String description,
+                                 BigDecimal price, int stockQuantity) {
+        validatePrice(price);
+        validateStockQuantity(stockQuantity);
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId.toString()));
+        authorizationPolicy.requireCanManage(actor, product);
+        Category category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new CategoryNotFoundException(categoryId.toString()));
+
+        if (!product.getName().equals(name)) {
+            product.setName(name);
+            product.setSlug(generateUniqueSlug(name));
+        }
+        product.setCategory(category);
+        product.setDescription(description);
+        product.setPrice(price);
+        product.setStockQuantity(stockQuantity);
+        return product;
+    }
+
+    @Transactional
+    public void deactivateProduct(com.bajar.saman.entity.User actor, UUID productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId.toString()));
+        authorizationPolicy.requireCanManage(actor, product);
+        product.setActive(false);
+    }
+
     private void validatePrice(BigDecimal price) {
         if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidProductDataException("Price must be greater than zero");
@@ -155,21 +188,4 @@ public class ProductService {
         return candidateSlug;
     }
 
-    private boolean isAdmin(com.bajar.saman.entity.User actor) {
-        return userRoleRepository.findRoleNamesByUserId(actor.getId()).contains("ADMIN");
-    }
-
-    private void requireOwnerOrAdmin(com.bajar.saman.entity.User actor, Product product) {
-        if (isAdmin(actor)) {
-            return;
-        }
-
-        boolean approvedOwner = actor.getSellerStatus() == com.bajar.saman.entity.SellerStatus.APPROVED
-                && product.getSeller() != null
-                && product.getSeller().getId().equals(actor.getId());
-        if (!approvedOwner) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "You can only modify products that you own");
-        }
-    }
 }

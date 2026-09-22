@@ -4,6 +4,7 @@ import com.bajar.saman.dto.CategoryResponse;
 import com.bajar.saman.dto.CreateProductRequest;
 import com.bajar.saman.dto.PageResponse;
 import com.bajar.saman.dto.ProductResponse;
+import com.bajar.saman.dto.UpdateProductRequest;
 import com.bajar.saman.entity.Product;
 import com.bajar.saman.entity.User;
 import com.bajar.saman.service.ProductService;
@@ -57,6 +58,15 @@ public class ProductController {
         return ResponseEntity.ok(PageResponse.from(products.map(this::toResponse)));
     }
 
+    @GetMapping("/mine")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<PageResponse<ProductResponse>> listMine(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(PageResponse.from(
+                productService.listOwnedProducts(user, pageable).map(this::toResponse)));
+    }
+
     @GetMapping("/category/{categoryId}")
     public ResponseEntity<PageResponse<ProductResponse>> listByCategory(
             @PathVariable UUID categoryId,
@@ -72,6 +82,25 @@ public class ProductController {
             @PathVariable UUID id, @RequestParam java.math.BigDecimal newPrice) {
         Product product = productService.updatePrice(user, id, newPrice);
         return ResponseEntity.ok(toResponse(product));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    public ResponseEntity<ProductResponse> update(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
+            @PathVariable UUID id, @Valid @RequestBody UpdateProductRequest request) {
+        Product product = productService.updateProduct(user, id, request.categoryId(),
+                request.name(), request.description(), request.price(), request.stockQuantity());
+        return ResponseEntity.ok(toResponse(product));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    public ResponseEntity<Void> deactivate(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
+            @PathVariable UUID id) {
+        productService.deactivateProduct(user, id);
+        return ResponseEntity.noContent().build();
     }
 
     private ProductResponse toResponse(Product product) {
