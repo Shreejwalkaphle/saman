@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,6 +116,18 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST,
                 "Required request part is missing: " + ex.getRequestPartName(), request);
+    }
+
+    // Spring performs path/query/header type conversion before entering a
+    // controller method. For example, "Idempotency-Key: not-a-uuid" cannot be
+    // converted to the UUID parameter used by checkout/payment initiation. That
+    // is invalid client input, so return a controlled 400 instead of allowing the
+    // framework exception to reach the generic 500 safety net.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST,
+                "Invalid value for parameter: " + ex.getName(), request);
     }
 
     // Triggered automatically when a @Valid-annotated request body fails its
