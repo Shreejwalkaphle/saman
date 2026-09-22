@@ -3,6 +3,8 @@ package com.bajar.saman.service;
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.InvalidProductDataException;
 import com.bajar.saman.exception.OrderNotFoundException;
+import com.bajar.saman.exception.PaymentNotFoundException;
+import com.bajar.saman.exception.IdempotencyConflictException;
 import com.bajar.saman.repository.OrderRepository;
 import com.bajar.saman.repository.PaymentRepository;
 import com.bajar.saman.service.payment.PaymentGateway;
@@ -58,10 +60,17 @@ public class PaymentService {
 
         var existingPayment = paymentRepository.findByIdempotencyKey(idempotencyKey);
         if (existingPayment.isPresent()) {
+            Payment existing = existingPayment.get();
+            if (!existing.getOrder().getUser().getId().equals(user.getId())) {
+                throw new PaymentNotFoundException(idempotencyKey.toString());
+            }
+            if (!existing.getOrder().getId().equals(orderId) || existing.getGateway() != gatewayType) {
+                throw new IdempotencyConflictException();
+            }
             // On a retry, there's no fresh redirectUrl to give (the original
             // gateway call already happened) — null is correct here, the
             // client already has/used the original one from the first response.
-            return new PaymentInitiationOutcome(existingPayment.get(), null);
+            return new PaymentInitiationOutcome(existing, null);
         }
 
         Order order = orderRepository.findById(orderId)
@@ -109,9 +118,13 @@ public class PaymentService {
      * either path would call into.
      */
     @Transactional
-    public Payment confirmPayment(UUID paymentId) {
+    public Payment confirmPayment(User user, UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                .orElseThrow(() -> new PaymentNotFoundException(paymentId.toString()));
+
+        if (!payment.getOrder().getUser().getId().equals(user.getId())) {
+            throw new PaymentNotFoundException(paymentId.toString());
+        }
 
         // Closes gap #3 tracked in PROGRESS.md (§6, HIGH priority): this
         // method previously called gateway.verify() unconditionally, every

@@ -2,7 +2,9 @@ package com.bajar.saman.service;
 
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.InvalidProductDataException;
+import com.bajar.saman.exception.IdempotencyConflictException;
 import com.bajar.saman.exception.OrderNotFoundException;
+import com.bajar.saman.exception.PaymentNotFoundException;
 import com.bajar.saman.repository.OrderRepository;
 import com.bajar.saman.repository.PaymentRepository;
 import com.bajar.saman.service.payment.PaymentGateway;
@@ -44,18 +46,31 @@ class PaymentServiceTest {
         return user;
     }
 
+    private Order buildOrder(UUID id, User user, BigDecimal amount) {
+        Order order = new Order(user, amount, UUID.randomUUID());
+        try {
+            var idField = Order.class.getDeclaredField("id");
+            idField.setAccessible(true);
+            idField.set(order, id);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return order;
+    }
+
     @Test
     void initiatePayment_withKnownIdempotencyKey_returnsExistingPaymentWithNullRedirectUrl() {
         UUID idempotencyKey = UUID.randomUUID();
         User user = buildUser(UUID.randomUUID());
-        Order order = new Order(user, new BigDecimal("100.00"), UUID.randomUUID());
+        UUID orderId = UUID.randomUUID();
+        Order order = buildOrder(orderId, user, new BigDecimal("100.00"));
         Payment existingPayment = new Payment(order, GatewayType.ESEWA,
                 new BigDecimal("100.00"), "NPR", idempotencyKey);
 
         when(paymentRepository.findByIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.of(existingPayment));
 
-        var result = paymentService.initiatePayment(user, UUID.randomUUID(), GatewayType.ESEWA, idempotencyKey);
+        var result = paymentService.initiatePayment(user, orderId, GatewayType.ESEWA, idempotencyKey);
 
         assertThat(result.payment()).isEqualTo(existingPayment);
         // No fresh redirect URL on a retry — the customer already has/used the
@@ -67,6 +82,37 @@ class PaymentServiceTest {
         verifyNoInteractions(orderRepository);
         verifyNoInteractions(gatewayFactory);
         verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void initiatePayment_withAnotherUsersIdempotencyKey_hidesExistingPayment() {
+        UUID key = UUID.randomUUID();
+        User owner = buildUser(UUID.randomUUID());
+        User attacker = buildUser(UUID.randomUUID());
+        UUID orderId = UUID.randomUUID();
+        Order order = buildOrder(orderId, owner, new BigDecimal("100.00"));
+        Payment existing = new Payment(order, GatewayType.ESEWA, new BigDecimal("100.00"), "NPR", key);
+        when(paymentRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(
+                attacker, orderId, GatewayType.ESEWA, key))
+                .isInstanceOf(PaymentNotFoundException.class);
+        verifyNoInteractions(orderRepository, gatewayFactory);
+    }
+
+    @Test
+    void initiatePayment_withSameKeyButDifferentGateway_rejectsRequestMismatch() {
+        UUID key = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        UUID orderId = UUID.randomUUID();
+        Order order = buildOrder(orderId, user, new BigDecimal("100.00"));
+        Payment existing = new Payment(order, GatewayType.ESEWA, new BigDecimal("100.00"), "NPR", key);
+        when(paymentRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(
+                user, orderId, GatewayType.KHALTI, key))
+                .isInstanceOf(IdempotencyConflictException.class);
+        verifyNoInteractions(orderRepository, gatewayFactory);
     }
 
     @Test
@@ -136,7 +182,7 @@ class PaymentServiceTest {
                 .thenReturn(new PaymentGateway.PaymentVerificationResult(
                         true, "REF-123", "SUCCESS", new BigDecimal("100.00")));
 
-        Payment result = paymentService.confirmPayment(paymentId);
+        Payment result = paymentService.confirmPayment(user, paymentId);
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
         // Confirms the ORDER's status was also correctly transitioned via dirty-
@@ -159,13 +205,30 @@ class PaymentServiceTest {
                 .thenReturn(new PaymentGateway.PaymentVerificationResult(
                         false, "REF-456", "FAILED", new BigDecimal("100.00")));
 
-        Payment result = paymentService.confirmPayment(paymentId);
+        Payment result = paymentService.confirmPayment(user, paymentId);
 
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.FAILED);
         // THE key design property this test guards: a failed payment must leave
         // the order re-triable (still PENDING), not push it into some
         // unrecoverable failed state that would force the customer to build a
         // brand new order just to try paying again.
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    void confirmPayment_forAnotherUsersPayment_hidesPaymentAndDoesNotCallGateway() {
+        UUID paymentId = UUID.randomUUID();
+        User owner = buildUser(UUID.randomUUID());
+        User attacker = buildUser(UUID.randomUUID());
+        Order order = buildOrder(UUID.randomUUID(), owner, new BigDecimal("100.00"));
+        Payment payment = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", UUID.randomUUID());
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> paymentService.confirmPayment(attacker, paymentId))
+                .isInstanceOf(PaymentNotFoundException.class);
+        verifyNoInteractions(gatewayFactory);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.INITIATED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
 }

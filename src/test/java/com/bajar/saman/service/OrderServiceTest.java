@@ -3,8 +3,9 @@ package com.bajar.saman.service;
 import com.bajar.saman.dto.ShippingAddressRequest;
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.InsufficientStockException;
+import com.bajar.saman.exception.IdempotencyConflictException;
 import com.bajar.saman.exception.InvalidProductDataException;
-import com.bajar.saman.repository.CartItemRepository;
+import com.bajar.saman.exception.OrderNotFoundException;
 import com.bajar.saman.repository.OrderRepository;
 import com.bajar.saman.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,6 @@ class OrderServiceTest {
 
     @Mock private OrderRepository orderRepository;
     @Mock private ProductRepository productRepository;
-    @Mock private CartItemRepository cartItemRepository;
     @Mock private CartService cartService;
     @Mock private com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
@@ -55,6 +55,7 @@ class OrderServiceTest {
         UUID idempotencyKey = UUID.randomUUID();
         User user = buildUser(UUID.randomUUID());
         Order existingOrder = new Order(user, new BigDecimal("999.99"), idempotencyKey);
+        existingOrder.setShippingAddress("Main Road", null, "Biratnagar", "Morang", null, "9800000000");
 
         when(orderRepository.findByIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.of(existingOrder));
@@ -71,7 +72,33 @@ class OrderServiceTest {
         verifyNoInteractions(cartService);
         verifyNoInteractions(productRepository);
         verify(orderRepository, never()).save(any());
-        verifyNoInteractions(cartItemRepository);
+    }
+
+    @Test
+    void checkout_withAnotherUsersIdempotencyKey_hidesExistingOrder() {
+        UUID key = UUID.randomUUID();
+        User owner = buildUser(UUID.randomUUID());
+        User attacker = buildUser(UUID.randomUUID());
+        Order existing = new Order(owner, new BigDecimal("999.99"), key);
+        existing.setShippingAddress("Main Road", null, "Biratnagar", "Morang", null, "9800000000");
+        when(orderRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> orderService.checkout(attacker, key, SHIPPING_ADDRESS))
+                .isInstanceOf(OrderNotFoundException.class);
+        verifyNoInteractions(cartService, productRepository);
+    }
+
+    @Test
+    void checkout_withSameKeyButDifferentAddress_rejectsRequestMismatch() {
+        UUID key = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order existing = new Order(user, new BigDecimal("999.99"), key);
+        existing.setShippingAddress("Original Road", null, "Biratnagar", "Morang", null, "9800000000");
+        when(orderRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> orderService.checkout(user, key, SHIPPING_ADDRESS))
+                .isInstanceOf(IdempotencyConflictException.class);
+        verifyNoInteractions(cartService, productRepository);
     }
 
     @Test
@@ -124,8 +151,7 @@ class OrderServiceTest {
         verify(productRepository).findByIdForCheckout(product.getId());
         verify(productRepository, never()).findById(any());
 
-        // Confirms the cart was actually cleared.
-        verify(cartItemRepository, times(1)).delete(cartItem);
+        verify(cartService).clearCart(user);
     }
 
     @Test
@@ -159,7 +185,7 @@ class OrderServiceTest {
         // simulates — but these assertions confirm the CODE PATH itself never
         // reaches the save/delete calls, which is the piece unit-testable here.)
         verify(orderRepository, never()).save(any());
-        verify(cartItemRepository, never()).delete(any());
+        verify(cartService, never()).clearCart(any());
     }
 
     @Test

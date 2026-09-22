@@ -111,6 +111,12 @@ public class CartService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    @Transactional
+    public void clearCart(User user) {
+        Cart cart = getOrCreateCart(user);
+        cart.clearItems();
+    }
+
     /**
      * Ownership check — CRITICAL security property, not just a convenience helper.
      * Without this, a malicious user could pass ANY cartItemId (e.g. one belonging

@@ -3,7 +3,6 @@ package com.bajar.saman.service;
 import com.bajar.saman.dto.ShippingAddressRequest;
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.*;
-import com.bajar.saman.repository.CartItemRepository;
 import com.bajar.saman.repository.OrderRepository;
 import com.bajar.saman.repository.ProductRepository;
 import org.springframework.stereotype.Service;
@@ -18,19 +17,16 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
-    private final CartItemRepository cartItemRepository;
     private final CartService cartService;
     private final com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
     public OrderService(
             OrderRepository orderRepository,
             ProductRepository productRepository,
-            CartItemRepository cartItemRepository,
             CartService cartService,
             com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
-        this.cartItemRepository = cartItemRepository;
         this.cartService = cartService;
         this.deliveryPartnerFactory = deliveryPartnerFactory;
     }
@@ -53,7 +49,14 @@ public class OrderService {
         // double-ordering on retry — the entire reason this column was added.
         var existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
         if (existingOrder.isPresent()) {
-            return existingOrder.get();
+            Order existing = existingOrder.get();
+            if (!existing.getUser().getId().equals(user.getId())) {
+                throw new OrderNotFoundException(idempotencyKey.toString());
+            }
+            if (!sameShippingAddress(existing, shippingAddress)) {
+                throw new IdempotencyConflictException();
+            }
+            return existing;
         }
 
         // ---- STEP 2: Load the cart, reject if empty ----
@@ -140,11 +143,18 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
 
         // ---- STEP 4: Clear the cart — checkout succeeded, nothing should remain ----
-        for (CartItem cartItem : cartItems) {
-            cartItemRepository.delete(cartItem);
-        }
+        cartService.clearCart(user);
 
         return savedOrder;
+    }
+
+    private boolean sameShippingAddress(Order order, ShippingAddressRequest request) {
+        return java.util.Objects.equals(order.getShippingAddressLine1(), request.addressLine1())
+                && java.util.Objects.equals(order.getShippingAddressLine2(), request.addressLine2())
+                && java.util.Objects.equals(order.getShippingCity(), request.city())
+                && java.util.Objects.equals(order.getShippingDistrict(), request.district())
+                && java.util.Objects.equals(order.getShippingPostalCode(), request.postalCode())
+                && java.util.Objects.equals(order.getShippingPhone(), request.phone());
     }
 
     @Transactional(readOnly = true)
