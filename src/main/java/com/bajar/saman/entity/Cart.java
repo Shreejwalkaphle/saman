@@ -52,4 +52,8 @@ public class Cart extends Auditable {
     public UUID getId() { return id; }
     public User getUser() { return user; }
     public List<CartItem> getItems() { return items; }
+
+    public void clearItems() {
+        items.clear();
+    }
 }

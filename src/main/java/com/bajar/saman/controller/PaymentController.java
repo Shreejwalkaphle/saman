@@ -48,8 +48,10 @@ public class PaymentController {
      * Flagged clearly as a known simplification, not a production-ready webhook.
      */
     @PostMapping("/{paymentId}/confirm")
-    public ResponseEntity<PaymentResponse> confirm(@PathVariable UUID paymentId) {
-        Payment payment = paymentService.confirmPayment(paymentId);
+    public ResponseEntity<PaymentResponse> confirm(
+            @AuthenticationPrincipal User user,
+            @PathVariable UUID paymentId) {
+        Payment payment = paymentService.confirmPayment(user, paymentId);
         return ResponseEntity.ok(toResponse(payment, null));
     }
 
