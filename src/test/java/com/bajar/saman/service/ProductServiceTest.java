@@ -2,20 +2,26 @@ package com.bajar.saman.service;
 
 import com.bajar.saman.entity.Category;
 import com.bajar.saman.entity.Product;
+import com.bajar.saman.entity.SellerStatus;
+import com.bajar.saman.entity.User;
 import com.bajar.saman.exception.CategoryNotFoundException;
 import com.bajar.saman.exception.DuplicateSkuException;
 import com.bajar.saman.exception.InvalidProductDataException;
 import com.bajar.saman.exception.ProductNotFoundException;
 import com.bajar.saman.repository.CategoryRepository;
 import com.bajar.saman.repository.ProductRepository;
+import com.bajar.saman.repository.UserRoleRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,10 +38,21 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private UserRoleRepository userRoleRepository;
+
     @InjectMocks
     private ProductService productService;
 
     private Category testCategory;
+    private User admin;
+
+    @BeforeEach
+    void setUpActor() {
+        admin = new User("admin@saman.test", "hash");
+        lenient().when(userRoleRepository.findRoleNamesByUserId(nullable(UUID.class)))
+                .thenReturn(List.of("ADMIN"));
+    }
 
     @Test
     void createProduct_withValidData_savesAndReturnsProduct() {
@@ -48,7 +65,7 @@ class ProductServiceTest {
         when(productRepository.save(any(Product.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Product result = productService.createProduct(
+        Product result = productService.createProduct(admin,
                 categoryId, "iPhone 17", "Latest phone",
                 new BigDecimal("999.99"), "SKU-001", 50);
 
@@ -61,7 +78,7 @@ class ProductServiceTest {
     @Test
     void createProduct_withZeroPrice_throwsInvalidProductDataException_beforeAnyDbCall() {
         assertThatThrownBy(() ->
-                productService.createProduct(
+                productService.createProduct(admin,
                         UUID.randomUUID(), "Free Item", "desc",
                         BigDecimal.ZERO, "SKU-002", 10)
         ).isInstanceOf(InvalidProductDataException.class);
@@ -76,7 +93,7 @@ class ProductServiceTest {
     @Test
     void createProduct_withNegativePrice_throwsInvalidProductDataException() {
         assertThatThrownBy(() ->
-                productService.createProduct(
+                productService.createProduct(admin,
                         UUID.randomUUID(), "Item", "desc",
                         new BigDecimal("-5.00"), "SKU-003", 10)
         ).isInstanceOf(InvalidProductDataException.class);
@@ -85,7 +102,7 @@ class ProductServiceTest {
     @Test
     void createProduct_withNegativeStock_throwsInvalidProductDataException() {
         assertThatThrownBy(() ->
-                productService.createProduct(
+                productService.createProduct(admin,
                         UUID.randomUUID(), "Item", "desc",
                         new BigDecimal("10.00"), "SKU-004", -1)
         ).isInstanceOf(InvalidProductDataException.class);
@@ -97,7 +114,7 @@ class ProductServiceTest {
         when(categoryRepository.findById(fakeCategoryId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                productService.createProduct(
+                productService.createProduct(admin,
                         fakeCategoryId, "Item", "desc",
                         new BigDecimal("10.00"), "SKU-005", 10)
         ).isInstanceOf(CategoryNotFoundException.class);
@@ -115,7 +132,7 @@ class ProductServiceTest {
         when(productRepository.existsBySku("DUPLICATE-SKU")).thenReturn(true);
 
         assertThatThrownBy(() ->
-                productService.createProduct(
+                productService.createProduct(admin,
                         categoryId, "Item", "desc",
                         new BigDecimal("10.00"), "DUPLICATE-SKU", 10)
         ).isInstanceOf(DuplicateSkuException.class);
@@ -134,7 +151,7 @@ class ProductServiceTest {
 
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
 
-        Product result = productService.updatePrice(productId, new BigDecimal("899.99"));
+        Product result = productService.updatePrice(admin, productId, new BigDecimal("899.99"));
 
         assertThat(result.getPrice()).isEqualByComparingTo("899.99");
 
@@ -150,7 +167,7 @@ class ProductServiceTest {
     @Test
     void updatePrice_withInvalidPrice_throwsBeforeLookingUpProduct() {
         assertThatThrownBy(() ->
-                productService.updatePrice(UUID.randomUUID(), BigDecimal.ZERO)
+                productService.updatePrice(admin, UUID.randomUUID(), BigDecimal.ZERO)
         ).isInstanceOf(InvalidProductDataException.class);
 
         verify(productRepository, never()).findById(any());
@@ -162,7 +179,7 @@ class ProductServiceTest {
         when(productRepository.findById(fakeId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                productService.updatePrice(fakeId, new BigDecimal("10.00"))
+                productService.updatePrice(admin, fakeId, new BigDecimal("10.00"))
         ).isInstanceOf(ProductNotFoundException.class);
     }
 
@@ -199,5 +216,81 @@ class ProductServiceTest {
         // — stock should still read its original value, not some intermediate
         // (invalid) computed value.
         assertThat(product.getStockQuantity()).isEqualTo(5);
+    }
+
+    @Test
+    void approvedSellerCreatesProductOwnedBySelf() {
+        User seller = seller(SellerStatus.APPROVED);
+        UUID categoryId = UUID.randomUUID();
+        testCategory = new Category("Mobile Phones", "mobile-phones", null);
+        when(userRoleRepository.findRoleNamesByUserId(seller.getId()))
+                .thenReturn(List.of("CUSTOMER", "SELLER"));
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(testCategory));
+        when(productRepository.existsBySku("SELLER-SKU")).thenReturn(false);
+        when(productRepository.findBySlug("seller-phone")).thenReturn(Optional.empty());
+        when(productRepository.save(any(Product.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Product product = productService.createProduct(seller, categoryId,
+                "Seller Phone", "Owned listing", new BigDecimal("500.00"),
+                "SELLER-SKU", 4);
+
+        assertThat(product.getSeller()).isSameAs(seller);
+    }
+
+    @Test
+    void pendingSellerCannotCreateProduct() {
+        User seller = seller(SellerStatus.PENDING_APPROVAL);
+        when(userRoleRepository.findRoleNamesByUserId(seller.getId()))
+                .thenReturn(List.of("CUSTOMER", "SELLER"));
+
+        assertThatThrownBy(() -> productService.createProduct(seller, UUID.randomUUID(),
+                "Blocked", "Pending seller", BigDecimal.TEN, "BLOCKED-SKU", 1))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verifyNoInteractions(categoryRepository);
+        verifyNoInteractions(productRepository);
+    }
+
+    @Test
+    void approvedSellerCanUpdateOwnProductPrice() {
+        User seller = seller(SellerStatus.APPROVED);
+        Product product = new Product(new Category("Phones", "phones", null),
+                "Own Phone", "own-phone", new BigDecimal("100.00"), "OWN-SKU", 2);
+        product.setSeller(seller);
+        UUID productId = UUID.randomUUID();
+        when(userRoleRepository.findRoleNamesByUserId(seller.getId()))
+                .thenReturn(List.of("CUSTOMER", "SELLER"));
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+
+        Product updated = productService.updatePrice(seller, productId, new BigDecimal("90.00"));
+
+        assertThat(updated.getPrice()).isEqualByComparingTo("90.00");
+    }
+
+    @Test
+    void approvedSellerCannotUpdateAnotherSellersProduct() {
+        User owner = seller(SellerStatus.APPROVED);
+        User otherSeller = seller(SellerStatus.APPROVED);
+        Product product = new Product(new Category("Phones", "phones", null),
+                "Other Phone", "other-phone", new BigDecimal("100.00"), "OTHER-SKU", 2);
+        product.setSeller(owner);
+        UUID productId = UUID.randomUUID();
+        when(userRoleRepository.findRoleNamesByUserId(otherSeller.getId()))
+                .thenReturn(List.of("CUSTOMER", "SELLER"));
+        when(productRepository.findById(productId)).thenReturn(Optional.of(product));
+
+        assertThatThrownBy(() -> productService.updatePrice(
+                otherSeller, productId, new BigDecimal("1.00")))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        assertThat(product.getPrice()).isEqualByComparingTo("100.00");
+    }
+
+    private User seller(SellerStatus status) {
+        User seller = new User(UUID.randomUUID() + "@saman.test", "hash");
+        ReflectionTestUtils.setField(seller, "id", UUID.randomUUID());
+        seller.setSellerStatus(status);
+        return seller;
     }
 }

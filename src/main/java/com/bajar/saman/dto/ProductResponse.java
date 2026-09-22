@@ -18,6 +18,7 @@ public record ProductResponse(
         String sku,
         int stockQuantity,
         boolean active,
+        UUID sellerId,
         CategoryResponse category
 ) {
 }

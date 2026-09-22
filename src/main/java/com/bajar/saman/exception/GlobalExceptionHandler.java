@@ -103,6 +103,14 @@ public class GlobalExceptionHandler {
                 "You do not have permission to perform this action", request);
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            org.springframework.security.access.AccessDeniedException ex,
+            HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN,
+                "You do not have permission to perform this action", request);
+    }
+
     // A required multipart part (e.g. the "file" field on an image upload) was
     // missing from the request entirely — a Spring-framework-level exception
     // thrown before the controller method body even runs, so it needs its own
