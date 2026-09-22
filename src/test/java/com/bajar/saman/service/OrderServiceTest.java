@@ -1,5 +1,6 @@
 package com.bajar.saman.service;
 
+import com.bajar.saman.dto.ShippingAddressRequest;
 import com.bajar.saman.entity.*;
 import com.bajar.saman.exception.InsufficientStockException;
 import com.bajar.saman.exception.InvalidProductDataException;
@@ -29,9 +30,13 @@ class OrderServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private CartItemRepository cartItemRepository;
     @Mock private CartService cartService;
+    @Mock private com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
     @InjectMocks
     private OrderService orderService;
+
+    private static final ShippingAddressRequest SHIPPING_ADDRESS = new ShippingAddressRequest(
+            "Main Road", null, "Biratnagar", "Morang", null, "9800000000");
 
     private User buildUser(UUID id) {
         User user = new User("test@example.com", "hashed");
@@ -54,7 +59,7 @@ class OrderServiceTest {
         when(orderRepository.findByIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.of(existingOrder));
 
-        Order result = orderService.checkout(user, idempotencyKey);
+        Order result = orderService.checkout(user, idempotencyKey, SHIPPING_ADDRESS);
 
         assertThat(result).isEqualTo(existingOrder);
 
@@ -77,7 +82,7 @@ class OrderServiceTest {
         when(orderRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
         when(cartService.getCartItems(user)).thenReturn(List.of());
 
-        assertThatThrownBy(() -> orderService.checkout(user, idempotencyKey))
+        assertThatThrownBy(() -> orderService.checkout(user, idempotencyKey, SHIPPING_ADDRESS))
                 .isInstanceOf(InvalidProductDataException.class);
 
         verifyNoInteractions(productRepository);
@@ -100,7 +105,7 @@ class OrderServiceTest {
         when(productRepository.findByIdForCheckout(product.getId())).thenReturn(Optional.of(product));
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        Order result = orderService.checkout(user, idempotencyKey);
+        Order result = orderService.checkout(user, idempotencyKey, SHIPPING_ADDRESS);
 
         assertThat(result.getTotalAmount()).isEqualByComparingTo("1999.98"); // 999.99 * 2
         assertThat(result.getItems()).hasSize(1);
@@ -144,7 +149,7 @@ class OrderServiceTest {
         when(cartService.getCartItems(user)).thenReturn(List.of(cartItem));
         when(productRepository.findByIdForCheckout(product.getId())).thenReturn(Optional.of(product));
 
-        assertThatThrownBy(() -> orderService.checkout(user, idempotencyKey))
+        assertThatThrownBy(() -> orderService.checkout(user, idempotencyKey, SHIPPING_ADDRESS))
                 .isInstanceOf(InsufficientStockException.class);
 
         // Nothing should have been persisted or cleared — the whole point of

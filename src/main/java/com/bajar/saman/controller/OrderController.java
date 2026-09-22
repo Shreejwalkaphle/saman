@@ -55,20 +55,21 @@ public class OrderController {
      * controllers) — shipping/delivery status changes are exactly the kind
      * of admin action that pattern exists for.
      */
-    @PatchMapping("/{orderId}/ship")
+    @PatchMapping("/{orderId}/dispatch")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<OrderResponse> ship(
+    public ResponseEntity<OrderResponse> dispatch(
             @PathVariable UUID orderId,
-            @RequestParam String deliveryPartner,
-            @RequestParam String trackingNumber) {
-        Order order = orderService.shipOrder(orderId, deliveryPartner, trackingNumber);
+            @RequestParam com.bajar.saman.entity.DeliveryPartnerType deliveryPartner) {
+        Order order = orderService.dispatchOrder(orderId, deliveryPartner);
         return ResponseEntity.ok(toResponse(order));
     }
 
-    @PatchMapping("/{orderId}/deliver")
+    @PatchMapping("/{orderId}/status")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<OrderResponse> deliver(@PathVariable UUID orderId) {
-        Order order = orderService.markDelivered(orderId);
+    public ResponseEntity<OrderResponse> advanceStatus(
+            @PathVariable UUID orderId,
+            @RequestParam com.bajar.saman.entity.OrderStatus newStatus) {
+        Order order = orderService.advanceDeliveryStatus(orderId, newStatus);
         return ResponseEntity.ok(toResponse(order));
     }
 

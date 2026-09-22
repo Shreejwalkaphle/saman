@@ -20,16 +20,19 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final CartItemRepository cartItemRepository;
     private final CartService cartService;
+    private final com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
     public OrderService(
             OrderRepository orderRepository,
             ProductRepository productRepository,
             CartItemRepository cartItemRepository,
-            CartService cartService) {
+            CartService cartService,
+            com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.cartItemRepository = cartItemRepository;
         this.cartService = cartService;
+        this.deliveryPartnerFactory = deliveryPartnerFactory;
     }
 
     /**
@@ -157,31 +160,66 @@ public class OrderService {
      * business-rule violations throughout this project, e.g.
      * ProductService's price/stock validation).
      */
+    /**
+     * Roadmap Addendum v2 §2.2/§2.3: legal FORWARD transitions in the
+     * delivery pipeline. A Map<OrderStatus, Set<OrderStatus>> — key is the
+     * CURRENT status, value is the set of statuses it's legal to move to
+     * from there. Any transition not listed here is rejected. This
+     * generalizes the single-status-guard pattern already used elsewhere
+     * in this project (Order's original PAID-before-ship check,
+     * PaymentService's terminal-status check) into an explicit, reviewable
+     * table rather than scattered if-checks — appropriate now that there
+     * are enough stages that ad-hoc checks would become error-prone.
+     */
+    private static final java.util.Map<OrderStatus, java.util.Set<OrderStatus>> ALLOWED_TRANSITIONS = java.util.Map.of(
+            OrderStatus.SHIPPED_FROM_WAREHOUSE, java.util.Set.of(OrderStatus.IN_TRANSIT, OrderStatus.DELIVERY_FAILED),
+            OrderStatus.IN_TRANSIT, java.util.Set.of(OrderStatus.ARRIVED_AT_LOCAL_HUB, OrderStatus.DELIVERY_FAILED),
+            OrderStatus.ARRIVED_AT_LOCAL_HUB, java.util.Set.of(OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERY_FAILED),
+            OrderStatus.OUT_FOR_DELIVERY, java.util.Set.of(OrderStatus.DELIVERED, OrderStatus.DELIVERY_FAILED)
+    );
+
+    /**
+     * Dispatches an order from the warehouse — the ONE transition that
+     * requires selecting a real delivery partner (via the Strategy+Factory
+     * pattern, same as Payment). Only legal from PAID.
+     */
     @Transactional
-    public Order shipOrder(UUID orderId, String deliveryPartner, String trackingNumber) {
+    public Order dispatchOrder(UUID orderId, com.bajar.saman.entity.DeliveryPartnerType partnerType) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId.toString()));
 
         if (order.getStatus() != OrderStatus.PAID) {
             throw new InvalidProductDataException(
-                    "Order must be PAID before it can be shipped (current status: " + order.getStatus() + ")");
+                    "Order must be PAID before it can be dispatched (current status: " + order.getStatus() + ")");
         }
 
-        order.markShipped(deliveryPartner, trackingNumber);
-        return order; // dirty-checking persists the change
+        com.bajar.saman.service.delivery.DeliveryPartner partner = deliveryPartnerFactory.getPartner(partnerType);
+        String trackingNumber = partner.initiateShipment(order);
+
+        order.dispatchFromWarehouse(partnerType.name(), trackingNumber);
+        return order;
     }
 
+    /**
+     * Advances an order through any LATER pipeline stage
+     * (IN_TRANSIT → ARRIVED_AT_LOCAL_HUB → OUT_FOR_DELIVERY → DELIVERED, or
+     * → DELIVERY_FAILED from any of those). Validated against
+     * ALLOWED_TRANSITIONS — an out-of-sequence jump (e.g. SHIPPED_FROM_WAREHOUSE
+     * straight to DELIVERED, skipping intermediate stages) is rejected, not
+     * silently allowed.
+     */
     @Transactional
-    public Order markDelivered(UUID orderId) {
+    public Order advanceDeliveryStatus(UUID orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId.toString()));
 
-        if (order.getStatus() != OrderStatus.SHIPPED) {
+        java.util.Set<OrderStatus> allowedNext = ALLOWED_TRANSITIONS.get(order.getStatus());
+        if (allowedNext == null || !allowedNext.contains(newStatus)) {
             throw new InvalidProductDataException(
-                    "Order must be SHIPPED before it can be marked delivered (current status: " + order.getStatus() + ")");
+                    "Cannot move order from " + order.getStatus() + " to " + newStatus);
         }
 
-        order.markDelivered();
+        order.advanceDeliveryStatus(newStatus);
         return order;
     }
 }

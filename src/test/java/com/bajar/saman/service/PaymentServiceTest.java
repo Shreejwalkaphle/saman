@@ -133,7 +133,8 @@ class PaymentServiceTest {
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
         when(gateway.verify("REF-123"))
-                .thenReturn(new PaymentGateway.PaymentVerificationResult(true, "REF-123", "SUCCESS"));
+                .thenReturn(new PaymentGateway.PaymentVerificationResult(
+                        true, "REF-123", "SUCCESS", new BigDecimal("100.00")));
 
         Payment result = paymentService.confirmPayment(paymentId);
 
@@ -155,7 +156,8 @@ class PaymentServiceTest {
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
         when(gateway.verify("REF-456"))
-                .thenReturn(new PaymentGateway.PaymentVerificationResult(false, "REF-456", "FAILED"));
+                .thenReturn(new PaymentGateway.PaymentVerificationResult(
+                        false, "REF-456", "FAILED", new BigDecimal("100.00")));
 
         Payment result = paymentService.confirmPayment(paymentId);
 

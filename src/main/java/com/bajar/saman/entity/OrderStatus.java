@@ -8,10 +8,21 @@ package com.bajar.saman.entity;
  * The V9 migration's `status VARCHAR(30)` column stores this enum's name() as
  * text — see @Enumerated(EnumType.STRING) on Order.status for how that mapping works.
  */
+/**
+ * Expanded per Roadmap Addendum v2 §2.2 — replaces the original binary
+ * SHIPPED/DELIVERED with a real multi-stage delivery pipeline. See
+ * OrderService's ALLOWED_TRANSITIONS map for which transitions between
+ * these states are actually legal — this enum only defines the possible
+ * values, not the valid sequence.
+ */
 public enum OrderStatus {
     PENDING,
     PAID,
-    SHIPPED,
+    SHIPPED_FROM_WAREHOUSE,
+    IN_TRANSIT,
+    ARRIVED_AT_LOCAL_HUB,
+    OUT_FOR_DELIVERY,
     DELIVERED,
-    CANCELLED
+    CANCELLED,
+    DELIVERY_FAILED
 }

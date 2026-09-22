@@ -125,16 +125,35 @@ public class Order extends Auditable {
         this.shippingPhone = phone;
     }
 
-    public void markShipped(String deliveryPartner, String trackingNumber) {
+    /**
+     * Called ONCE, when an order is first dispatched from the warehouse —
+     * sets partner/tracking/shippedAt together (same atomic-related-fields
+     * reasoning as the original markShipped()) and advances status to
+     * SHIPPED_FROM_WAREHOUSE. Subsequent pipeline stages use
+     * advanceDeliveryStatus() below, which doesn't touch partner/tracking
+     * again (those don't change after initial dispatch).
+     */
+    public void dispatchFromWarehouse(String deliveryPartner, String trackingNumber) {
         this.deliveryPartner = deliveryPartner;
         this.trackingNumber = trackingNumber;
         this.shippedAt = java.time.LocalDateTime.now();
-        this.status = OrderStatus.SHIPPED;
+        this.status = OrderStatus.SHIPPED_FROM_WAREHOUSE;
     }
 
-    public void markDelivered() {
-        this.deliveredAt = java.time.LocalDateTime.now();
-        this.status = OrderStatus.DELIVERED;
+    /**
+     * Advances the order to any LATER pipeline stage (IN_TRANSIT,
+     * ARRIVED_AT_LOCAL_HUB, OUT_FOR_DELIVERY, DELIVERED, DELIVERY_FAILED).
+     * Legal-transition validation itself lives in OrderService (business-
+     * rule ordering, matching where similar checks live throughout this
+     * project — e.g. the original shipOrder()/markDelivered() status
+     * guards) — this method just performs the actual state change once the
+     * service layer has confirmed it's a valid transition.
+     */
+    public void advanceDeliveryStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+        if (newStatus == OrderStatus.DELIVERED) {
+            this.deliveredAt = java.time.LocalDateTime.now();
+        }
     }
     public Long getVersion() { return version; }
     public List<OrderItem> getItems() { return items; }
