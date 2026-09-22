@@ -72,7 +72,12 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
+                        // Only credential-entry endpoints are public. `/api/auth/me`
+                        // must pass through the authenticated rule below; permitting
+                        // the entire `/api/auth/**` tree allowed an anonymous request
+                        // to reach AuthController with a null principal and return 500.
+                        .requestMatchers(org.springframework.http.HttpMethod.POST,
+                                "/api/auth/login", "/api/auth/register").permitAll()
                         // Browsing the catalog (viewing categories/products) must work
                         // WITHOUT being logged in — a customer shouldn't need an account
                         // just to look around. Only GET requests to these paths are
