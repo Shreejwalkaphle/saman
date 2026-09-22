@@ -63,7 +63,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public Product getProductBySlug(String slug) {
-        return productRepository.findBySlug(slug)
+        return productRepository.findBySlugAndActiveTrue(slug)
                 .orElseThrow(() -> new ProductNotFoundException(slug));
     }
 

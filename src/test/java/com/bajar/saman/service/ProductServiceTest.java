@@ -75,6 +75,17 @@ class ProductServiceTest {
     }
 
     @Test
+    void publicSlugLookupDoesNotReturnInactiveProduct() {
+        when(productRepository.findBySlugAndActiveTrue("hidden-product"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.getProductBySlug("hidden-product"))
+                .isInstanceOf(ProductNotFoundException.class);
+
+        verify(productRepository).findBySlugAndActiveTrue("hidden-product");
+    }
+
+    @Test
     void createProduct_withZeroPrice_throwsInvalidProductDataException_beforeAnyDbCall() {
         assertThatThrownBy(() ->
                 productService.createProduct(admin,
