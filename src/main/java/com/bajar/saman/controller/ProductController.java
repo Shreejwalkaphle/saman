@@ -5,6 +5,7 @@ import com.bajar.saman.dto.CreateProductRequest;
 import com.bajar.saman.dto.PageResponse;
 import com.bajar.saman.dto.ProductResponse;
 import com.bajar.saman.entity.Product;
+import com.bajar.saman.entity.User;
 import com.bajar.saman.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -28,10 +29,12 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ProductResponse> create(@Valid @RequestBody CreateProductRequest request) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    public ResponseEntity<ProductResponse> create(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
+            @Valid @RequestBody CreateProductRequest request) {
         Product product = productService.createProduct(
-                request.categoryId(), request.name(), request.description(),
+                user, request.categoryId(), request.name(), request.description(),
                 request.price(), request.sku(), request.stockQuantity());
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(product));
     }
@@ -63,10 +66,11 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}/price")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
     public ResponseEntity<ProductResponse> updatePrice(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
             @PathVariable UUID id, @RequestParam java.math.BigDecimal newPrice) {
-        Product product = productService.updatePrice(id, newPrice);
+        Product product = productService.updatePrice(user, id, newPrice);
         return ResponseEntity.ok(toResponse(product));
     }
 
@@ -89,6 +93,7 @@ public class ProductController {
                 product.getSku(),
                 product.getStockQuantity(),
                 product.isActive(),
+                product.getSeller() != null ? product.getSeller().getId() : null,
                 categoryResponse
         );
     }

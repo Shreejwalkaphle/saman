@@ -8,6 +8,7 @@ import com.bajar.saman.exception.InvalidProductDataException;
 import com.bajar.saman.exception.ProductNotFoundException;
 import com.bajar.saman.repository.CategoryRepository;
 import com.bajar.saman.repository.ProductRepository;
+import com.bajar.saman.repository.UserRoleRepository;
 import com.bajar.saman.util.SlugGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,16 +23,25 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final UserRoleRepository userRoleRepository;
 
-    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository) {
+    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
+                          UserRoleRepository userRoleRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.userRoleRepository = userRoleRepository;
     }
 
     @Transactional
     public Product createProduct(
-            UUID categoryId, String name, String description,
+            com.bajar.saman.entity.User actor, UUID categoryId, String name, String description,
             BigDecimal price, String sku, int stockQuantity) {
+
+        boolean admin = isAdmin(actor);
+        if (!admin && actor.getSellerStatus() != com.bajar.saman.entity.SellerStatus.APPROVED) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Only administrators or approved sellers can create products");
+        }
 
         // Validate business rules BEFORE touching the database at all — same
         // "fail fast, cheaply" pattern as UserRegistrationService's
@@ -49,6 +59,7 @@ public class ProductService {
         String uniqueSlug = generateUniqueSlug(name);
 
         Product product = new Product(category, name, uniqueSlug, price, sku, stockQuantity);
+        product.setSeller(admin ? null : actor);
         product.setDescription(description);
 
         return productRepository.save(product);
@@ -71,11 +82,13 @@ public class ProductService {
     }
 
     @Transactional
-    public Product updatePrice(UUID productId, BigDecimal newPrice) {
+    public Product updatePrice(com.bajar.saman.entity.User actor, UUID productId, BigDecimal newPrice) {
         validatePrice(newPrice);
 
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException(productId.toString()));
+
+        requireOwnerOrAdmin(actor, product);
 
         // No manual save() call needed here — this is "dirty checking," a core
         // Hibernate/JPA behavior we haven't explicitly relied on yet in this
@@ -140,5 +153,23 @@ public class ProductService {
         }
 
         return candidateSlug;
+    }
+
+    private boolean isAdmin(com.bajar.saman.entity.User actor) {
+        return userRoleRepository.findRoleNamesByUserId(actor.getId()).contains("ADMIN");
+    }
+
+    private void requireOwnerOrAdmin(com.bajar.saman.entity.User actor, Product product) {
+        if (isAdmin(actor)) {
+            return;
+        }
+
+        boolean approvedOwner = actor.getSellerStatus() == com.bajar.saman.entity.SellerStatus.APPROVED
+                && product.getSeller() != null
+                && product.getSeller().getId().equals(actor.getId());
+        if (!approvedOwner) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "You can only modify products that you own");
+        }
     }
 }
