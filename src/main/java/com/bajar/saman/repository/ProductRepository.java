@@ -52,4 +52,6 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     // All active products, no category filter — for a general "browse everything"
     // storefront view.
     Page<Product> findByActiveTrue(Pageable pageable);
+
+    Page<Product> findBySellerId(UUID sellerId, Pageable pageable);
 }
