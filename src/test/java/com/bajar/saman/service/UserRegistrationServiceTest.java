@@ -56,7 +56,7 @@ class UserRegistrationServiceTest {
         when(roleRepository.findByName("CUSTOMER")).thenReturn(Optional.of(customerRole));
 
         // ACT
-        User result = registrationService.register("newuser@example.com", "password123", false);
+        User result = registrationService.register("newuser@example.com", "password123");
 
         // ASSERT
         assertThat(result.getEmail()).isEqualTo("newuser@example.com");
@@ -76,7 +76,7 @@ class UserRegistrationServiceTest {
         when(userRepository.existsByEmail("existing@example.com")).thenReturn(true);
 
         assertThatThrownBy(() ->
-                registrationService.register("existing@example.com", "password123", false)
+                registrationService.register("existing@example.com", "password123")
         ).isInstanceOf(DuplicateEmailException.class);
 
         // Confirms the early-exit actually happens BEFORE any wasted work — password
@@ -110,7 +110,7 @@ class UserRegistrationServiceTest {
         // fix (flagged in PROGRESS.md as "possibly incomplete" at the time) is
         // actually working correctly.
         assertThatThrownBy(() ->
-                registrationService.register("racecondition@example.com", "password123", false)
+                registrationService.register("racecondition@example.com", "password123")
         ).isInstanceOf(DuplicateEmailException.class);
 
         // Since the save() itself failed, role assignment must NEVER be attempted —
@@ -129,7 +129,7 @@ class UserRegistrationServiceTest {
         when(roleRepository.findByName("CUSTOMER")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                registrationService.register("newuser@example.com", "password123", false)
+                registrationService.register("newuser@example.com", "password123")
         ).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("CUSTOMER");
 
@@ -155,7 +155,7 @@ class UserRegistrationServiceTest {
         // WHAT email ended up on the saved entity, not just that some save happened.
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
 
-        registrationService.register("ShreejwalTest@Example.com", "password123", false);
+        registrationService.register("ShreejwalTest@Example.com", "password123");
 
         verify(userRepository).save(userCaptor.capture());
         assertThat(userCaptor.getValue().getEmail()).isEqualTo("shreejwaltest@example.com");

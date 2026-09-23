@@ -53,7 +53,7 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
 
-        User user = registrationService.register(request.email(), request.password(), request.asSeller());
+        User user = registrationService.register(request.email(), request.password());
 
         // Registration doesn't currently issue a token via AuthenticationService
         // (that would mean re-verifying a password we just set, which is redundant) —
@@ -93,7 +93,6 @@ public class AuthController {
         // form object instead of resolving it as a dependency).
         java.util.List<String> roles = userRoleRepository.findRoleNamesByUserId(user.getId());
         return ResponseEntity.ok(new com.bajar.saman.dto.UserProfileResponse(
-                user.getId(), user.getEmail(), roles,
-                user.getSellerStatus() != null ? user.getSellerStatus().name() : null));
+                user.getId(), user.getEmail(), roles));
     }
 }

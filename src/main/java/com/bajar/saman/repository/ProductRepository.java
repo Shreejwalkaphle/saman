@@ -55,5 +55,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     // storefront view.
     Page<Product> findByActiveTrue(Pageable pageable);
 
-    Page<Product> findBySellerId(UUID sellerId, Pageable pageable);
+    Page<Product> findByShopId(UUID shopId, Pageable pageable);
+
+    Page<Product> findByShopIdAndActiveTrue(UUID shopId, Pageable pageable);
 }

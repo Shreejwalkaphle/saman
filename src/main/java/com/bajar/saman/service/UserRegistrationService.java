@@ -12,13 +12,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.bajar.saman.util.EmailNormalizer;
-import com.bajar.saman.entity.SellerStatus;
 
 @Service
 public class UserRegistrationService {
 
     private static final String DEFAULT_ROLE = "CUSTOMER";
-    private static final String SELLER_ROLE = "SELLER";
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -37,7 +35,7 @@ public class UserRegistrationService {
     }
 
     @Transactional
-    public User register(String email, String rawPassword, boolean asSeller) {
+    public User register(String email, String rawPassword) {
 
         // Normalize FIRST — before the existence check, before hashing, before
         // constructing the entity. Every downstream use of `email` in this method
@@ -65,26 +63,6 @@ public class UserRegistrationService {
 
         UserRole userRole = new UserRole(user, customerRole);
         userRoleRepository.save(userRole);
-
-        // Roadmap Addendum v2 §1.4: seller application at registration time.
-        // The account ALSO gets the SELLER role immediately (many-to-many
-        // roles, established since the Auth module — a user can legitimately
-        // hold both CUSTOMER and SELLER) — but sellerStatus starts at
-        // PENDING_APPROVAL, and it's THAT field (not role possession alone)
-        // that will gate actual seller capability once seller-specific
-        // endpoints exist. Holding the SELLER role without approval is
-        // intentionally not equivalent to being an approved seller.
-        if (asSeller) {
-            Role sellerRole = roleRepository.findByName(SELLER_ROLE)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Default role '" + SELLER_ROLE + "' not found — check V1 migration seed data"));
-
-            UserRole sellerAssignment = new UserRole(user, sellerRole);
-            userRoleRepository.save(sellerAssignment);
-
-            user.setSellerStatus(SellerStatus.PENDING_APPROVAL);
-            userRepository.save(user);
-        }
 
         return user;
     }

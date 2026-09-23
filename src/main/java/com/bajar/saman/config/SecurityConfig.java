@@ -78,20 +78,18 @@ public class SecurityConfig {
                         // to reach AuthController with a null principal and return 500.
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/auth/login", "/api/auth/register").permitAll()
+                        // These read endpoints expose account/shop management data.
+                        // Declare them before the public catalog wildcards below so
+                        // anonymous callers fail in the filter chain with 401.
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/api/shops/mine", "/api/products/shop/*/manage").authenticated()
                         // Browsing the catalog (viewing categories/products) must work
                         // WITHOUT being logged in — a customer shouldn't need an account
                         // just to look around. Only GET requests to these paths are
                         // public; POST/PUT/DELETE on the same paths still fall through
                         // to anyRequest().authenticated() below.
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
-                                "/api/categories/**", "/api/products/**").permitAll()
-                        // KNOWN GAP (tracked in PROGRESS.md): this only requires SOME
-                        // authenticated user for create/update endpoints — not
-                        // specifically an ADMIN. Any logged-in CUSTOMER can currently
-                        // create categories/products. Closing this requires ABAC/role-
-                        // based @PreAuthorize rules, which are a deliberately deferred
-                        // item from the Auth module audit — will be closed once that's
-                        // built, not before.
+                                "/api/categories/**", "/api/products/**", "/api/shops/**").permitAll()
                         // Uploaded product images must be viewable without login —
                         // same public-browsing reasoning as GET on /api/products above.
                         .requestMatchers(org.springframework.http.HttpMethod.GET,

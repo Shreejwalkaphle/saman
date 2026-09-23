@@ -29,9 +29,9 @@ public class Product extends Auditable {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "seller_id")
-    private User seller;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "shop_id", nullable = false)
+    private Shop shop;
 
     @Column(name = "name", nullable = false, length = 200)
     private String name;
@@ -84,7 +84,7 @@ public class Product extends Auditable {
     // --- Getters ---
     public UUID getId() { return id; }
     public Category getCategory() { return category; }
-    public User getSeller() { return seller; }
+    public Shop getShop() { return shop; }
     public String getName() { return name; }
     public String getSlug() { return slug; }
     public String getDescription() { return description; }
@@ -96,7 +96,7 @@ public class Product extends Auditable {
 
     // --- Setters ---
     public void setCategory(Category category) { this.category = category; }
-    public void setSeller(User seller) { this.seller = seller; }
+    public void setShop(Shop shop) { this.shop = shop; }
     public void setName(String name) { this.name = name; }
     public void setSlug(String slug) { this.slug = slug; }
     public void setDescription(String description) { this.description = description; }

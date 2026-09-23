@@ -7,6 +7,9 @@ import java.util.UUID;
 
 public record CreateProductRequest(
 
+        @NotNull(message = "Shop is required")
+        UUID shopId,
+
         @NotNull(message = "Category is required")
         UUID categoryId,
 

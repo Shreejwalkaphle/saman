@@ -1,6 +1,5 @@
 package com.bajar.saman.repository;
 
-import com.bajar.saman.entity.SellerStatus;
 import com.bajar.saman.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,6 +13,5 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByEmail(String email);
 
-    List<User> findBySellerStatus(SellerStatus sellerStatus);
 
 }

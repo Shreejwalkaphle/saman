@@ -51,11 +51,19 @@ public class GlobalExceptionHandler {
             CategoryNotFoundException.class,
             CartItemNotFoundException.class,
             OrderNotFoundException.class,
-            PaymentNotFoundException.class
+            PaymentNotFoundException.class,
+            ShopNotFoundException.class
     })
     public ResponseEntity<ErrorResponse> handleNotFound(
             RuntimeException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex,
+            HttpServletRequest request) {
+        return buildResponse(HttpStatus.NOT_FOUND, "Resource not found", request);
     }
 
     // Wrong email/password on login -> 401 Unauthorized.

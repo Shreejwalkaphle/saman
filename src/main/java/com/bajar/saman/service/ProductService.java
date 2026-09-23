@@ -8,6 +8,7 @@ import com.bajar.saman.exception.InvalidProductDataException;
 import com.bajar.saman.exception.ProductNotFoundException;
 import com.bajar.saman.repository.CategoryRepository;
 import com.bajar.saman.repository.ProductRepository;
+import com.bajar.saman.repository.ShopRepository;
 import com.bajar.saman.util.SlugGenerator;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,27 +24,28 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductAuthorizationPolicy authorizationPolicy;
+    private final ShopRepository shopRepository;
 
     public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-                          ProductAuthorizationPolicy authorizationPolicy) {
+                          ProductAuthorizationPolicy authorizationPolicy, ShopRepository shopRepository) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
         this.authorizationPolicy = authorizationPolicy;
+        this.shopRepository = shopRepository;
     }
 
     @Transactional
     public Product createProduct(
-            com.bajar.saman.entity.User actor, UUID categoryId, String name, String description,
+            com.bajar.saman.entity.User actor, UUID shopId, UUID categoryId, String name, String description,
             BigDecimal price, String sku, int stockQuantity) {
 
-        authorizationPolicy.requireCanCreate(actor);
-        boolean admin = authorizationPolicy.isAdmin(actor);
-
-        // Validate business rules BEFORE touching the database at all — same
-        // "fail fast, cheaply" pattern as UserRegistrationService's
-        // existsByEmail-before-hashing check.
+        // Reject malformed business data before any database or authorization work.
         validatePrice(price);
         validateStockQuantity(stockQuantity);
+
+        com.bajar.saman.entity.Shop shop = shopRepository.findById(shopId)
+                .orElseThrow(() -> new com.bajar.saman.exception.ShopNotFoundException(shopId.toString()));
+        authorizationPolicy.requireCanCreate(actor, shop);
 
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException(categoryId.toString()));
@@ -55,7 +57,7 @@ public class ProductService {
         String uniqueSlug = generateUniqueSlug(name);
 
         Product product = new Product(category, name, uniqueSlug, price, sku, stockQuantity);
-        product.setSeller(admin ? null : actor);
+        product.setShop(shop);
         product.setDescription(description);
 
         return productRepository.save(product);
@@ -127,9 +129,19 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public Page<Product> listOwnedProducts(com.bajar.saman.entity.User seller, Pageable pageable) {
-        authorizationPolicy.requireApprovedSeller(seller);
-        return productRepository.findBySellerId(seller.getId(), pageable);
+    public Page<Product> listShopProducts(com.bajar.saman.entity.User actor, UUID shopId, Pageable pageable) {
+        com.bajar.saman.entity.Shop shop = shopRepository.findById(shopId)
+                .orElseThrow(() -> new com.bajar.saman.exception.ShopNotFoundException(shopId.toString()));
+        authorizationPolicy.requireActiveMember(actor, shop);
+        return productRepository.findByShopId(shopId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Product> listActiveProductsForShop(UUID shopId, Pageable pageable) {
+        com.bajar.saman.entity.Shop shop = shopRepository.findById(shopId)
+                .filter(candidate -> candidate.getStatus() == com.bajar.saman.entity.ShopStatus.ACTIVE)
+                .orElseThrow(() -> new com.bajar.saman.exception.ShopNotFoundException(shopId.toString()));
+        return productRepository.findByShopIdAndActiveTrue(shop.getId(), pageable);
     }
 
     @Transactional
