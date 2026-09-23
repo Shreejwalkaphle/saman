@@ -4,6 +4,7 @@ import com.bajar.saman.entity.GatewayType;
 import com.bajar.saman.entity.Order;
 
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * The Strategy pattern interface roadmap doc Section 9 calls for by name. Every
@@ -31,9 +32,17 @@ public interface PaymentGateway {
      * endpoint (customer's browser redirects back, we ask the gateway to confirm),
      * depending on which pattern a given gateway uses.
      */
-    PaymentVerificationResult verify(String gatewayReference);
+    PaymentVerificationResult verify(String gatewayReference, java.math.BigDecimal expectedAmount);
 
-    record PaymentInitiationResult(String redirectUrl, String gatewayReference) {
+    record PaymentInitiationResult(
+            String redirectUrl,
+            String redirectMethod,
+            Map<String, String> redirectFields,
+            String gatewayReference
+    ) {
+        public PaymentInitiationResult {
+            redirectFields = redirectFields == null ? Map.of() : Map.copyOf(redirectFields);
+        }
     }
 
     /**
@@ -48,6 +57,7 @@ public interface PaymentGateway {
      * implementation.
      */
     record PaymentVerificationResult(
+            boolean terminal,
             boolean success,
             String gatewayReference,
             String rawStatus,

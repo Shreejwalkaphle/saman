@@ -1,6 +1,7 @@
 package com.bajar.saman.repository;
 
 import com.bajar.saman.entity.Payment;
+import com.bajar.saman.entity.GatewayType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,6 +11,9 @@ import java.util.UUID;
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Optional<Payment> findByIdempotencyKey(UUID idempotencyKey);
+
+    Optional<Payment> findByGatewayAndGatewayReference(
+            GatewayType gateway, String gatewayReference);
 
     // Closes gap #4 tracked in PROGRESS.md (§6, HIGH priority). Changed
     // from Optional<Payment> to List<Payment> — a single order CAN have

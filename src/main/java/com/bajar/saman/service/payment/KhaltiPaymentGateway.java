@@ -26,15 +26,17 @@ public class KhaltiPaymentGateway implements PaymentGateway {
         // Khalti's own API spec.
         String simulatedReference = "KHALTI-" + UUID.randomUUID();
         String simulatedRedirectUrl = "https://simulated.khalti.example/pay?pidx=" + simulatedReference;
-        return new PaymentInitiationResult(simulatedRedirectUrl, simulatedReference);
+        return new PaymentInitiationResult(
+                simulatedRedirectUrl, "GET", java.util.Map.of(), simulatedReference);
     }
 
     @Override
-    public PaymentVerificationResult verify(String gatewayReference) {
+    public PaymentVerificationResult verify(String gatewayReference, java.math.BigDecimal expectedAmount) {
         // REAL IMPLEMENTATION: Khalti's lookup API, server-to-server, same
         // "never trust a client-side redirect param alone" reasoning as eSewa.
         // amountReceived null in simulation — see EsewaPaymentGateway's
         // identical comment for why, and what a real implementation must do.
-        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS", null);
+        return new PaymentVerificationResult(true, true, gatewayReference,
+                "SIMULATED_SUCCESS", expectedAmount);
     }
 }

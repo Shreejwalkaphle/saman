@@ -2,6 +2,7 @@ package com.bajar.saman.dto;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.Map;
 
 public record PaymentResponse(
         UUID id,
@@ -10,6 +11,8 @@ public record PaymentResponse(
         String status,
         BigDecimal amount,
         String currency,
-        String redirectUrl // null once already-confirmed; populated on initiation
+        String redirectUrl,
+        String redirectMethod,
+        Map<String, String> redirectFields
 ) {
 }

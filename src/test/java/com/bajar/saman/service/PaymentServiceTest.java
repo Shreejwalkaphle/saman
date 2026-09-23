@@ -159,7 +159,8 @@ class PaymentServiceTest {
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
         when(gateway.initiate(eq(order), any()))
-                .thenReturn(new PaymentGateway.PaymentInitiationResult("https://example.com/pay", "REF-123"));
+                .thenReturn(new PaymentGateway.PaymentInitiationResult(
+                        "https://example.com/pay", "GET", java.util.Map.of(), "REF-123"));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         var result = paymentService.initiatePayment(user, orderId, GatewayType.ESEWA, UUID.randomUUID());
@@ -178,9 +179,9 @@ class PaymentServiceTest {
 
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
-        when(gateway.verify("REF-123"))
+        when(gateway.verify("REF-123", new BigDecimal("100.00")))
                 .thenReturn(new PaymentGateway.PaymentVerificationResult(
-                        true, "REF-123", "SUCCESS", new BigDecimal("100.00")));
+                        true, true, "REF-123", "SUCCESS", new BigDecimal("100.00")));
 
         Payment result = paymentService.confirmPayment(user, paymentId);
 
@@ -201,9 +202,9 @@ class PaymentServiceTest {
 
         when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
-        when(gateway.verify("REF-456"))
+        when(gateway.verify("REF-456", new BigDecimal("100.00")))
                 .thenReturn(new PaymentGateway.PaymentVerificationResult(
-                        false, "REF-456", "FAILED", new BigDecimal("100.00")));
+                        true, false, "REF-456", "FAILED", new BigDecimal("100.00")));
 
         Payment result = paymentService.confirmPayment(user, paymentId);
 
@@ -212,6 +213,27 @@ class PaymentServiceTest {
         // the order re-triable (still PENDING), not push it into some
         // unrecoverable failed state that would force the customer to build a
         // brand new order just to try paying again.
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
+    void confirmPayment_whenGatewayIsStillPending_keepsAttemptInitiated() {
+        UUID paymentId = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order order = new Order(user, new BigDecimal("100.00"), UUID.randomUUID());
+        Payment payment = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", UUID.randomUUID());
+        payment.setGatewayReference("PENDING-REF");
+
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
+        when(gateway.verify("PENDING-REF", new BigDecimal("100.00")))
+                .thenReturn(new PaymentGateway.PaymentVerificationResult(
+                        false, false, "PENDING-REF", "PENDING", new BigDecimal("100.00")));
+
+        Payment result = paymentService.confirmPayment(user, paymentId);
+
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.INITIATED);
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
 
