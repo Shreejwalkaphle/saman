@@ -4,6 +4,7 @@ import com.bajar.saman.entity.Cart;
 import com.bajar.saman.entity.CartItem;
 import com.bajar.saman.entity.Product;
 import com.bajar.saman.entity.User;
+import com.bajar.saman.entity.Shop;
 import com.bajar.saman.exception.CartItemNotFoundException;
 import com.bajar.saman.exception.InsufficientStockException;
 import com.bajar.saman.exception.InvalidProductDataException;
@@ -102,6 +103,30 @@ class CartServiceTest {
         assertThat(result.getQuantity()).isEqualTo(5); // 2 + 3, merged
         // Confirms this is the SAME row, updated via dirty-checking — no new
         // save() call, matching the pattern established in ProductService.
+        verify(cartItemRepository, never()).save(any());
+    }
+
+    @Test
+    void addItem_fromDifferentShop_isRejectedBeforeMutation() {
+        UUID userId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        User user = buildUser(userId);
+        Cart cart = new Cart(user);
+        Shop firstShop = shop("First Shop");
+        Shop secondShop = shop("Second Shop");
+        Product existingProduct = new Product(null, "Rice", "rice", BigDecimal.TEN, "RICE-1", 10);
+        existingProduct.setShop(firstShop);
+        Product requestedProduct = new Product(null, "Oil", "oil", BigDecimal.TEN, "OIL-1", 10);
+        requestedProduct.setShop(secondShop);
+        CartItem existingItem = new CartItem(cart, existingProduct, 1, BigDecimal.TEN);
+
+        when(productRepository.findById(productId)).thenReturn(Optional.of(requestedProduct));
+        when(cartRepository.findByUserId(userId)).thenReturn(Optional.of(cart));
+        when(cartItemRepository.findFirstByCartId(cart.getId())).thenReturn(Optional.of(existingItem));
+
+        assertThatThrownBy(() -> cartService.addItem(user, productId, 1))
+                .isInstanceOf(InvalidProductDataException.class)
+                .hasMessageContaining("only one shop");
         verify(cartItemRepository, never()).save(any());
     }
 
@@ -230,5 +255,13 @@ class CartServiceTest {
         BigDecimal total = cartService.getCartTotal(user);
 
         assertThat(total).isEqualByComparingTo("96.50"); // 20.00 + 76.50
+    }
+
+    private Shop shop(String name) {
+        Shop shop = new Shop(name, name.toLowerCase().replace(' ', '-'), UUID.randomUUID(),
+                "9800000000", "Main Road", "Biratnagar", "Morang",
+                new BigDecimal("26.4525"), new BigDecimal("87.2718"));
+        org.springframework.test.util.ReflectionTestUtils.setField(shop, "id", UUID.randomUUID());
+        return shop;
     }
 }

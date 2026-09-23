@@ -15,4 +15,5 @@ public interface CartItemRepository extends JpaRepository<CartItem, UUID> {
     // give correct "increase quantity" behavior instead of just catching and
     // converting a constraint-violation exception).
     Optional<CartItem> findByCartIdAndProductId(UUID cartId, UUID productId);
+    Optional<CartItem> findFirstByCartId(UUID cartId);
 }
