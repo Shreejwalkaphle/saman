@@ -8,10 +8,14 @@ import java.util.UUID;
 public record OrderResponse(
         UUID id,
         String status,
+        BigDecimal subtotalAmount,
+        BigDecimal deliveryFee,
         BigDecimal totalAmount,
         LocalDateTime createdAt,
         List<OrderItemResponse> items,
         String shippingCity,
+        BigDecimal shippingLatitude,
+        BigDecimal shippingLongitude,
         String trackingNumber,
         LocalDateTime shippedAt,
         LocalDateTime deliveredAt

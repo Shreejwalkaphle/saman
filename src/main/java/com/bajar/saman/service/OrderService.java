@@ -18,16 +18,19 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final CartService cartService;
+    private final DeliveryQuoteService deliveryQuoteService;
     private final com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
     public OrderService(
             OrderRepository orderRepository,
             ProductRepository productRepository,
             CartService cartService,
+            DeliveryQuoteService deliveryQuoteService,
             com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.cartService = cartService;
+        this.deliveryQuoteService = deliveryQuoteService;
         this.deliveryPartnerFactory = deliveryPartnerFactory;
     }
 
@@ -144,7 +147,10 @@ public class OrderService {
         // the constructor isn't ideal either. Simplest correct fix: give Order a
         // package-private/internal setter for this one case (see Order.java note
         // below) rather than fight the entity's own immutability conventions.
-        order.setTotalAmount(total);
+        DeliveryQuote deliveryQuote = deliveryQuoteService.claim(
+                user, shippingAddress.deliveryQuoteId(), orderShopId,
+                shippingAddress.latitude(), shippingAddress.longitude());
+        order.applyDeliveryQuote(total, deliveryQuote);
         // Address is captured here, at order-creation time, snapshotted onto
         // the Order itself — see V14 migration's comment for why this isn't
         // a live reference to a user profile address (which doesn't exist
@@ -152,7 +158,8 @@ public class OrderService {
         order.setShippingAddress(
                 shippingAddress.addressLine1(), shippingAddress.addressLine2(),
                 shippingAddress.city(), shippingAddress.district(),
-                shippingAddress.postalCode(), shippingAddress.phone());
+                shippingAddress.postalCode(), shippingAddress.phone(),
+                shippingAddress.latitude(), shippingAddress.longitude());
 
         Order savedOrder = orderRepository.save(order);
 
@@ -168,7 +175,11 @@ public class OrderService {
                 && java.util.Objects.equals(order.getShippingCity(), request.city())
                 && java.util.Objects.equals(order.getShippingDistrict(), request.district())
                 && java.util.Objects.equals(order.getShippingPostalCode(), request.postalCode())
-                && java.util.Objects.equals(order.getShippingPhone(), request.phone());
+                && java.util.Objects.equals(order.getShippingPhone(), request.phone())
+                && java.util.Objects.equals(order.getShippingLatitude(), request.latitude())
+                && java.util.Objects.equals(order.getShippingLongitude(), request.longitude())
+                && order.getDeliveryQuote() != null
+                && java.util.Objects.equals(order.getDeliveryQuote().getId(), request.deliveryQuoteId());
     }
 
     @Transactional(readOnly = true)

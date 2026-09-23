@@ -34,6 +34,16 @@ public class Order extends Auditable {
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "subtotal_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal subtotalAmount = BigDecimal.ZERO;
+
+    @Column(name = "delivery_fee", nullable = false, precision = 10, scale = 2)
+    private BigDecimal deliveryFee = BigDecimal.ZERO;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "delivery_quote_id", unique = true)
+    private DeliveryQuote deliveryQuote;
+
     @Column(name = "idempotency_key", nullable = false, unique = true)
     private UUID idempotencyKey;
 
@@ -64,6 +74,12 @@ public class Order extends Auditable {
 
     @Column(name = "shipping_phone", length = 20)
     private String shippingPhone;
+
+    @Column(name = "shipping_latitude", precision = 9, scale = 6)
+    private BigDecimal shippingLatitude;
+
+    @Column(name = "shipping_longitude", precision = 9, scale = 6)
+    private BigDecimal shippingLongitude;
 
     @Column(name = "delivery_partner", length = 50)
     private String deliveryPartner;
@@ -101,6 +117,9 @@ public class Order extends Auditable {
     public User getUser() { return user; }
     public OrderStatus getStatus() { return status; }
     public BigDecimal getTotalAmount() { return totalAmount; }
+    public BigDecimal getSubtotalAmount() { return subtotalAmount; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public DeliveryQuote getDeliveryQuote() { return deliveryQuote; }
     public UUID getIdempotencyKey() { return idempotencyKey; }
     public String getCurrency() { return currency; }
     public java.math.BigDecimal getExchangeRateSnapshot() { return exchangeRateSnapshot; }
@@ -110,19 +129,24 @@ public class Order extends Auditable {
     public String getShippingDistrict() { return shippingDistrict; }
     public String getShippingPostalCode() { return shippingPostalCode; }
     public String getShippingPhone() { return shippingPhone; }
+    public BigDecimal getShippingLatitude() { return shippingLatitude; }
+    public BigDecimal getShippingLongitude() { return shippingLongitude; }
     public String getDeliveryPartner() { return deliveryPartner; }
     public String getTrackingNumber() { return trackingNumber; }
     public java.time.LocalDateTime getShippedAt() { return shippedAt; }
     public java.time.LocalDateTime getDeliveredAt() { return deliveredAt; }
 
     public void setShippingAddress(String line1, String line2, String city,
-                                   String district, String postalCode, String phone) {
+                                   String district, String postalCode, String phone,
+                                   BigDecimal latitude, BigDecimal longitude) {
         this.shippingAddressLine1 = line1;
         this.shippingAddressLine2 = line2;
         this.shippingCity = city;
         this.shippingDistrict = district;
         this.shippingPostalCode = postalCode;
         this.shippingPhone = phone;
+        this.shippingLatitude = latitude;
+        this.shippingLongitude = longitude;
     }
 
     /**
@@ -171,5 +195,12 @@ public class Order extends Auditable {
     // to be public since OrderService is in a DIFFERENT package; see note below).
     public void setTotalAmount(BigDecimal totalAmount) {
         this.totalAmount = totalAmount;
+    }
+
+    public void applyDeliveryQuote(BigDecimal subtotalAmount, DeliveryQuote quote) {
+        this.subtotalAmount = subtotalAmount;
+        this.deliveryFee = quote.getFee();
+        this.totalAmount = subtotalAmount.add(quote.getFee());
+        this.deliveryQuote = quote;
     }
 }

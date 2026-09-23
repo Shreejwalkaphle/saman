@@ -30,13 +30,18 @@ class OrderServiceTest {
     @Mock private OrderRepository orderRepository;
     @Mock private ProductRepository productRepository;
     @Mock private CartService cartService;
+    @Mock private DeliveryQuoteService deliveryQuoteService;
     @Mock private com.bajar.saman.service.delivery.DeliveryPartnerFactory deliveryPartnerFactory;
 
     @InjectMocks
     private OrderService orderService;
 
+    private static final UUID QUOTE_ID = UUID.randomUUID();
+    private static final BigDecimal LATITUDE = new BigDecimal("26.452500");
+    private static final BigDecimal LONGITUDE = new BigDecimal("87.271800");
     private static final ShippingAddressRequest SHIPPING_ADDRESS = new ShippingAddressRequest(
-            "Main Road", null, "Biratnagar", "Morang", null, "9800000000");
+            "Main Road", null, "Biratnagar", "Morang", null, "9800000000",
+            QUOTE_ID, LATITUDE, LONGITUDE);
 
     private User buildUser(UUID id) {
         User user = new User("test@example.com", "hashed");
@@ -55,7 +60,7 @@ class OrderServiceTest {
         UUID idempotencyKey = UUID.randomUUID();
         User user = buildUser(UUID.randomUUID());
         Order existingOrder = new Order(user, new BigDecimal("999.99"), idempotencyKey);
-        existingOrder.setShippingAddress("Main Road", null, "Biratnagar", "Morang", null, "9800000000");
+        attachQuoteAndAddress(existingOrder);
 
         when(orderRepository.findByIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.of(existingOrder));
@@ -80,7 +85,7 @@ class OrderServiceTest {
         User owner = buildUser(UUID.randomUUID());
         User attacker = buildUser(UUID.randomUUID());
         Order existing = new Order(owner, new BigDecimal("999.99"), key);
-        existing.setShippingAddress("Main Road", null, "Biratnagar", "Morang", null, "9800000000");
+        attachQuoteAndAddress(existing);
         when(orderRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> orderService.checkout(attacker, key, SHIPPING_ADDRESS))
@@ -93,7 +98,9 @@ class OrderServiceTest {
         UUID key = UUID.randomUUID();
         User user = buildUser(UUID.randomUUID());
         Order existing = new Order(user, new BigDecimal("999.99"), key);
-        existing.setShippingAddress("Original Road", null, "Biratnagar", "Morang", null, "9800000000");
+        attachQuoteAndAddress(existing);
+        existing.setShippingAddress("Original Road", null, "Biratnagar", "Morang", null, "9800000000",
+                LATITUDE, LONGITUDE);
         when(orderRepository.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> orderService.checkout(user, key, SHIPPING_ADDRESS))
@@ -131,11 +138,17 @@ class OrderServiceTest {
         when(orderRepository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
         when(cartService.getCartItems(user)).thenReturn(List.of(cartItem));
         when(productRepository.findByIdForCheckout(product.getId())).thenReturn(Optional.of(product));
+        DeliveryQuote quote = mock(DeliveryQuote.class);
+        when(quote.getFee()).thenReturn(new BigDecimal("30.00"));
+        when(deliveryQuoteService.claim(user, QUOTE_ID, product.getShop().getId(), LATITUDE, LONGITUDE))
+                .thenReturn(quote);
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
 
         Order result = orderService.checkout(user, idempotencyKey, SHIPPING_ADDRESS);
 
-        assertThat(result.getTotalAmount()).isEqualByComparingTo("1999.98"); // 999.99 * 2
+        assertThat(result.getSubtotalAmount()).isEqualByComparingTo("1999.98");
+        assertThat(result.getDeliveryFee()).isEqualByComparingTo("30.00");
+        assertThat(result.getTotalAmount()).isEqualByComparingTo("2029.98");
         assertThat(result.getItems()).hasSize(1);
         assertThat(result.getItems().get(0).getQuantity()).isEqualTo(2);
 
@@ -210,5 +223,13 @@ class OrderServiceTest {
                 new BigDecimal("87.2718"));
         org.springframework.test.util.ReflectionTestUtils.setField(shop, "id", UUID.randomUUID());
         return shop;
+    }
+
+    private void attachQuoteAndAddress(Order order) {
+        DeliveryQuote quote = mock(DeliveryQuote.class);
+        lenient().when(quote.getId()).thenReturn(QUOTE_ID);
+        org.springframework.test.util.ReflectionTestUtils.setField(order, "deliveryQuote", quote);
+        order.setShippingAddress("Main Road", null, "Biratnagar", "Morang", null, "9800000000",
+                LATITUDE, LONGITUDE);
     }
 }
