@@ -59,12 +59,28 @@ public class CartService {
         }
 
         Cart cart = getOrCreateCart(user);
+        if (cart.getId() != null) {
+            cart = cartRepository.findByUserIdForUpdate(user.getId()).orElse(cart);
+        }
+        final Cart lockedCart = cart;
+
+        // One delivery has one pickup shop. Mixing shops would make pricing,
+        // packing responsibility, dispatch and settlement ambiguous. Enforce
+        // the invariant when an item enters the cart and re-check at checkout.
+        cartItemRepository.findFirstByCartId(lockedCart.getId()).ifPresent(firstItem -> {
+            UUID existingShopId = firstItem.getProduct().getShop().getId();
+            UUID requestedShopId = product.getShop().getId();
+            if (!existingShopId.equals(requestedShopId)) {
+                throw new InvalidProductDataException(
+                        "A cart can contain products from only one shop. Clear the cart before shopping from another shop");
+            }
+        });
 
         // "Already in cart?" check — if the customer adds the same product twice,
         // this INCREASES quantity on the existing row rather than creating a
         // duplicate (which the DB's UNIQUE(cart_id, product_id) constraint would
         // reject anyway) or silently failing.
-        return cartItemRepository.findByCartIdAndProductId(cart.getId(), productId)
+        return cartItemRepository.findByCartIdAndProductId(lockedCart.getId(), productId)
                 .map(existingItem -> {
                     int newQuantity = existingItem.getQuantity() + quantity;
                     validateStockAvailable(product, newQuantity);
@@ -74,7 +90,7 @@ public class CartService {
                 })
                 .orElseGet(() -> {
                     validateStockAvailable(product, quantity);
-                    CartItem newItem = new CartItem(cart, product, quantity, product.getPrice());
+                    CartItem newItem = new CartItem(lockedCart, product, quantity, product.getPrice());
                     return cartItemRepository.save(newItem);
                 });
     }

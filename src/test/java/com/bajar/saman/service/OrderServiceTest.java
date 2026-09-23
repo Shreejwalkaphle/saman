@@ -124,6 +124,7 @@ class OrderServiceTest {
 
         Product product = new Product(null, "iPhone 17", "iphone-17",
                 new BigDecimal("999.99"), "SKU-001", 50);
+        product.setShop(buildShop());
         Cart cart = new Cart(user);
         CartItem cartItem = new CartItem(cart, product, 2, new BigDecimal("999.99"));
 
@@ -168,6 +169,7 @@ class OrderServiceTest {
         // dropped after this item was added to the cart.
         Product product = new Product(null, "iPhone 17", "iphone-17",
                 new BigDecimal("999.99"), "SKU-001", 1);
+        product.setShop(buildShop());
         Cart cart = new Cart(user);
         CartItem cartItem = new CartItem(cart, product, 5, new BigDecimal("999.99"));
 
@@ -200,5 +202,13 @@ class OrderServiceTest {
 
         assertThat(result).hasSize(1);
         verify(orderRepository).findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    private Shop buildShop() {
+        Shop shop = new Shop("Test Shop", "test-shop", UUID.randomUUID(), "9800000000",
+                "Main Road", "Biratnagar", "Morang", new BigDecimal("26.4525"),
+                new BigDecimal("87.2718"));
+        org.springframework.test.util.ReflectionTestUtils.setField(shop, "id", UUID.randomUUID());
+        return shop;
     }
 }

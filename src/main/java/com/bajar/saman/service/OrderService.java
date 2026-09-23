@@ -72,6 +72,7 @@ public class OrderService {
 
         BigDecimal total = BigDecimal.ZERO;
         Order order = new Order(user, BigDecimal.ZERO, idempotencyKey); // total filled in below
+        UUID orderShopId = null;
 
         // ---- STEP 3: For EACH cart item — lock, validate, decrement, snapshot ----
         for (CartItem cartItem : cartItems) {
@@ -90,6 +91,14 @@ public class OrderService {
             // until the first is fully done.
             Product product = productRepository.findByIdForCheckout(cartItem.getProduct().getId())
                     .orElseThrow(() -> new ProductNotFoundException(cartItem.getProduct().getId().toString()));
+
+            UUID productShopId = product.getShop().getId();
+            if (orderShopId == null) {
+                orderShopId = productShopId;
+            } else if (!orderShopId.equals(productShopId)) {
+                throw new InvalidProductDataException(
+                        "A single order cannot contain products from multiple shops");
+            }
 
             // Closes gap #2 tracked in PROGRESS.md (§6, HIGH priority):
             // re-checking stock alone was insufficient — a product an admin
