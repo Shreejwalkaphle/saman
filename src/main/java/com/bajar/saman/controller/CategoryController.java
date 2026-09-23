@@ -50,6 +50,14 @@ public class CategoryController {
         return ResponseEntity.ok(response);
     }
 
+    // Backward-compatible catalog entry point used by the frontend/Postman
+    // collection. The unqualified category list represents root categories;
+    // children remain available through /{parentId}/subcategories.
+    @GetMapping
+    public ResponseEntity<List<CategoryResponse>> listCategories() {
+        return getRootCategories();
+    }
+
     @GetMapping("/{parentId}/subcategories")
     public ResponseEntity<List<CategoryResponse>> getSubcategories(@PathVariable UUID parentId) {
         List<CategoryResponse> response = categoryService.getSubcategories(parentId)
