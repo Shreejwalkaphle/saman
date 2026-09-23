@@ -132,6 +132,19 @@ public class PaymentService {
             throw new PaymentNotFoundException(paymentId.toString());
         }
 
+        return reconcile(payment);
+    }
+
+    /** Internal recovery path used by the scheduled reconciliation job. */
+    @Transactional
+    public Payment reconcileInitiatedPayment(UUID paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new PaymentNotFoundException(paymentId.toString()));
+        return reconcile(payment);
+    }
+
+    private Payment reconcile(Payment payment) {
+
         // Closes gap #3 tracked in PROGRESS.md (§6, HIGH priority): this
         // method previously called gateway.verify() unconditionally, every
         // time — including on a REDELIVERED confirmation for a payment

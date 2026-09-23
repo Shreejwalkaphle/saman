@@ -2,8 +2,10 @@ package com.bajar.saman.repository;
 
 import com.bajar.saman.entity.Payment;
 import com.bajar.saman.entity.GatewayType;
+import com.bajar.saman.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +16,11 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Optional<Payment> findByGatewayAndGatewayReference(
             GatewayType gateway, String gatewayReference);
+
+    List<Payment> findTop50ByGatewayAndStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
+            GatewayType gateway,
+            PaymentStatus status,
+            LocalDateTime createdBefore);
 
     // Closes gap #4 tracked in PROGRESS.md (§6, HIGH priority). Changed
     // from Optional<Payment> to List<Payment> — a single order CAN have

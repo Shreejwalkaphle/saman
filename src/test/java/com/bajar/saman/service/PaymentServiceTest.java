@@ -238,6 +238,42 @@ class PaymentServiceTest {
     }
 
     @Test
+    void reconcileInitiatedPayment_recoversLostBrowserCallback() {
+        UUID paymentId = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order order = new Order(user, new BigDecimal("100.00"), UUID.randomUUID());
+        Payment payment = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", UUID.randomUUID());
+        payment.setGatewayReference("RECOVERY-REF");
+
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+        when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
+        when(gateway.verify("RECOVERY-REF", new BigDecimal("100.00")))
+                .thenReturn(new PaymentGateway.PaymentVerificationResult(
+                        true, true, "RECOVERY-REF", "COMPLETE", new BigDecimal("100.00")));
+
+        Payment result = paymentService.reconcileInitiatedPayment(paymentId);
+
+        assertThat(result.getStatus()).isEqualTo(PaymentStatus.SUCCESS);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    void reconcileTerminalPaymentIsIdempotentAndSkipsGateway() {
+        UUID paymentId = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order order = new Order(user, new BigDecimal("100.00"), UUID.randomUUID());
+        order.setStatus(OrderStatus.PAID);
+        Payment payment = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", UUID.randomUUID());
+        payment.setStatus(PaymentStatus.SUCCESS);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(payment));
+
+        assertThat(paymentService.reconcileInitiatedPayment(paymentId)).isSameAs(payment);
+        verifyNoInteractions(gatewayFactory);
+    }
+
+    @Test
     void confirmPayment_forAnotherUsersPayment_hidesPaymentAndDoesNotCallGateway() {
         UUID paymentId = UUID.randomUUID();
         User owner = buildUser(UUID.randomUUID());
