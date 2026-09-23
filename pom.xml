@@ -140,6 +140,21 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Real PostgreSQL integration tests. H2 remains useful for fast unit and
+		     context tests, but it cannot prove PostgreSQL locks, constraints, or
+		     that the complete Flyway chain applies successfully. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<version>2.0.5</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
+			<version>2.0.5</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
