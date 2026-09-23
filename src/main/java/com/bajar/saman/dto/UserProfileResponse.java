@@ -6,7 +6,6 @@ import java.util.UUID;
 public record UserProfileResponse(
         UUID id,
         String email,
-        List<String> roles,
-        String sellerStatus
+        List<String> roles
 ) {
 }

@@ -30,12 +30,12 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProductResponse> create(
             @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
             @Valid @RequestBody CreateProductRequest request) {
         Product product = productService.createProduct(
-                user, request.categoryId(), request.name(), request.description(),
+                user, request.shopId(), request.categoryId(), request.name(), request.description(),
                 request.price(), request.sku(), request.stockQuantity());
         return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(product));
     }
@@ -58,13 +58,22 @@ public class ProductController {
         return ResponseEntity.ok(PageResponse.from(products.map(this::toResponse)));
     }
 
-    @GetMapping("/mine")
-    @PreAuthorize("hasRole('SELLER')")
-    public ResponseEntity<PageResponse<ProductResponse>> listMine(
+    @GetMapping("/shop/{shopId}/manage")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<PageResponse<ProductResponse>> listForManagement(
             @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
+            @PathVariable UUID shopId,
             @PageableDefault(size = 20, sort = "name") Pageable pageable) {
         return ResponseEntity.ok(PageResponse.from(
-                productService.listOwnedProducts(user, pageable).map(this::toResponse)));
+                productService.listShopProducts(user, shopId, pageable).map(this::toResponse)));
+    }
+
+    @GetMapping("/shop/{shopId}")
+    public ResponseEntity<PageResponse<ProductResponse>> listForShop(
+            @PathVariable UUID shopId,
+            @PageableDefault(size = 20, sort = "name") Pageable pageable) {
+        return ResponseEntity.ok(PageResponse.from(
+                productService.listActiveProductsForShop(shopId, pageable).map(this::toResponse)));
     }
 
     @GetMapping("/category/{categoryId}")
@@ -76,7 +85,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}/price")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProductResponse> updatePrice(
             @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
             @PathVariable UUID id, @RequestParam java.math.BigDecimal newPrice) {
@@ -85,7 +94,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ProductResponse> update(
             @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
             @PathVariable UUID id, @Valid @RequestBody UpdateProductRequest request) {
@@ -95,7 +104,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SELLER')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deactivate(
             @org.springframework.security.core.annotation.AuthenticationPrincipal User user,
             @PathVariable UUID id) {
@@ -122,7 +131,8 @@ public class ProductController {
                 product.getSku(),
                 product.getStockQuantity(),
                 product.isActive(),
-                product.getSeller() != null ? product.getSeller().getId() : null,
+                product.getShop().getId(),
+                product.getShop().getName(),
                 categoryResponse
         );
     }
