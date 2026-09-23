@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -123,7 +124,7 @@ class PaymentServiceTest {
         Order order = new Order(owner, new BigDecimal("100.00"), UUID.randomUUID());
 
         when(paymentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForPaymentOrExpiry(orderId)).thenReturn(Optional.of(order));
 
         assertThatThrownBy(() ->
                 paymentService.initiatePayment(attacker, orderId, GatewayType.ESEWA, UUID.randomUUID())
@@ -140,7 +141,7 @@ class PaymentServiceTest {
         order.setStatus(OrderStatus.PAID); // already paid
 
         when(paymentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForPaymentOrExpiry(orderId)).thenReturn(Optional.of(order));
 
         assertThatThrownBy(() ->
                 paymentService.initiatePayment(user, orderId, GatewayType.ESEWA, UUID.randomUUID())
@@ -156,7 +157,7 @@ class PaymentServiceTest {
         Order order = new Order(user, new BigDecimal("100.00"), UUID.randomUUID());
 
         when(paymentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
-        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.findByIdForPaymentOrExpiry(orderId)).thenReturn(Optional.of(order));
         when(gatewayFactory.getGateway(GatewayType.ESEWA)).thenReturn(gateway);
         when(gateway.initiate(eq(order), any()))
                 .thenReturn(new PaymentGateway.PaymentInitiationResult(
@@ -167,6 +168,46 @@ class PaymentServiceTest {
 
         assertThat(result.redirectUrl()).isEqualTo("https://example.com/pay");
         assertThat(result.payment().getGatewayReference()).isEqualTo("REF-123");
+    }
+
+    @Test
+    void initiatePayment_withDifferentKeyRejectsExistingUnresolvedAttempt() {
+        UUID orderId = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order order = buildOrder(orderId, user, new BigDecimal("100.00"));
+        Payment unresolved = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", UUID.randomUUID());
+        when(paymentRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
+        when(orderRepository.findByIdForPaymentOrExpiry(orderId)).thenReturn(Optional.of(order));
+        when(paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId))
+                .thenReturn(List.of(unresolved));
+
+        assertThatThrownBy(() -> paymentService.initiatePayment(
+                user, orderId, GatewayType.ESEWA, UUID.randomUUID()))
+                .isInstanceOf(InvalidProductDataException.class)
+                .hasMessageContaining("unresolved payment");
+        verifyNoInteractions(gatewayFactory);
+    }
+
+    @Test
+    void initiatePayment_rechecksSameKeyAfterAcquiringOrderLock() {
+        UUID key = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        User user = buildUser(UUID.randomUUID());
+        Order order = buildOrder(orderId, user, new BigDecimal("100.00"));
+        Payment concurrentWinner = new Payment(order, GatewayType.ESEWA,
+                new BigDecimal("100.00"), "NPR", key);
+        when(paymentRepository.findByIdempotencyKey(key))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(concurrentWinner));
+        when(orderRepository.findByIdForPaymentOrExpiry(orderId)).thenReturn(Optional.of(order));
+
+        var result = paymentService.initiatePayment(user, orderId, GatewayType.ESEWA, key);
+
+        assertThat(result.payment()).isSameAs(concurrentWinner);
+        assertThat(result.redirectUrl()).isNull();
+        verifyNoInteractions(gatewayFactory);
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test

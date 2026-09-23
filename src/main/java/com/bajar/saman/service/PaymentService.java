@@ -78,8 +78,26 @@ public class PaymentService {
             return new PaymentInitiationOutcome(existing, null, null, java.util.Map.of());
         }
 
-        Order order = orderRepository.findById(orderId)
+        // Serializes payment initiation against automatic order expiry. Without
+        // this row lock, expiry could restore stock while a payment attempt is
+        // being created for the same still-PENDING order.
+        Order order = orderRepository.findByIdForPaymentOrExpiry(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId.toString()));
+
+        // The first lookup above is the fast idempotency path. Re-check after
+        // acquiring the order lock because another request with this same key
+        // may have committed while this transaction was waiting for the lock.
+        existingPayment = paymentRepository.findByIdempotencyKey(idempotencyKey);
+        if (existingPayment.isPresent()) {
+            Payment existing = existingPayment.get();
+            if (!existing.getOrder().getUser().getId().equals(user.getId())) {
+                throw new PaymentNotFoundException(idempotencyKey.toString());
+            }
+            if (!existing.getOrder().getId().equals(orderId) || existing.getGateway() != gatewayType) {
+                throw new IdempotencyConflictException();
+            }
+            return new PaymentInitiationOutcome(existing, null, null, java.util.Map.of());
+        }
 
         // Ownership check — same security property as CartService.getOwnedCartItem(),
         // same reasoning: without this, any authenticated user could pay for (or
@@ -95,6 +113,14 @@ public class PaymentService {
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new InvalidProductDataException(
                     "Order is not in a payable state (current status: " + order.getStatus() + ")");
+        }
+
+        boolean hasUnresolvedAttempt = paymentRepository.findByOrderIdOrderByCreatedAtDesc(orderId)
+                .stream()
+                .anyMatch(payment -> payment.getStatus() == PaymentStatus.INITIATED);
+        if (hasUnresolvedAttempt) {
+            throw new InvalidProductDataException(
+                    "Order already has an unresolved payment attempt");
         }
 
         // Factory enforces the DB-backed is_enabled gate — StripePaymentGateway

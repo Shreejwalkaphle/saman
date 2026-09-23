@@ -60,10 +60,15 @@ public class OrderService {
         }
 
         // ---- STEP 2: Load the cart, reject if empty ----
-        List<CartItem> cartItems = cartService.getCartItems(user);
+        List<CartItem> cartItems = new java.util.ArrayList<>(cartService.getCartItems(user));
         if (cartItems.isEmpty()) {
             throw new InvalidProductDataException("Cannot check out an empty cart");
         }
+
+        // Every transaction locks product rows in the same deterministic order.
+        // This prevents two multi-product checkouts (or checkout versus expiry)
+        // from taking opposite lock orders and deadlocking each other.
+        cartItems.sort(java.util.Comparator.comparing(item -> item.getProduct().getId()));
 
         BigDecimal total = BigDecimal.ZERO;
         Order order = new Order(user, BigDecimal.ZERO, idempotencyKey); // total filled in below
