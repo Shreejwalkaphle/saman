@@ -92,10 +92,14 @@ public class OrderController {
         return new OrderResponse(
                 order.getId(),
                 order.getStatus().name(),
+                order.getSubtotalAmount(),
+                order.getDeliveryFee(),
                 order.getTotalAmount(),
                 order.getCreatedAt(),
                 items,
                 order.getShippingCity(),
+                order.getShippingLatitude(),
+                order.getShippingLongitude(),
                 order.getTrackingNumber(),
                 order.getShippedAt(),
                 order.getDeliveredAt()
