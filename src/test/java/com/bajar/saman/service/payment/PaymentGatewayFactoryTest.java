@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +47,13 @@ class PaymentGatewayFactoryTest {
                 .thenReturn(Optional.of(buildConfig(GatewayType.ESEWA, true)));
 
         PaymentGatewayFactory factory = new PaymentGatewayFactory(
-                List.of(new EsewaPaymentGateway(), new KhaltiPaymentGateway()), configRepository);
+                List.of(new EsewaPaymentGateway(
+                                RestClient.builder(),
+                                "https://example.test/esewa/form",
+                                "https://example.test/esewa/status",
+                                "EPAYTEST", "test-secret",
+                                "http://localhost/success", "http://localhost/failure"),
+                        new KhaltiPaymentGateway()), configRepository);
 
         PaymentGateway result = factory.getGateway(GatewayType.ESEWA);
 

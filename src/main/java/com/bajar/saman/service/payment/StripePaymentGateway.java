@@ -31,11 +31,13 @@ public class StripePaymentGateway implements PaymentGateway {
         // may need to widen PaymentInitiationResult's shape when this is built.
         String simulatedReference = "STRIPE-" + UUID.randomUUID();
         String simulatedRedirectUrl = "https://simulated.stripe.example/checkout?session=" + simulatedReference;
-        return new PaymentInitiationResult(simulatedRedirectUrl, simulatedReference);
+        return new PaymentInitiationResult(
+                simulatedRedirectUrl, "GET", java.util.Map.of(), simulatedReference);
     }
 
     @Override
-    public PaymentVerificationResult verify(String gatewayReference) {
-        return new PaymentVerificationResult(true, gatewayReference, "SIMULATED_SUCCESS", null);
+    public PaymentVerificationResult verify(String gatewayReference, java.math.BigDecimal expectedAmount) {
+        return new PaymentVerificationResult(true, true, gatewayReference,
+                "SIMULATED_SUCCESS", expectedAmount);
     }
 }

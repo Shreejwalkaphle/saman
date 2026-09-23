@@ -52,7 +52,12 @@ public class PaymentService {
     // customer uses it), but the caller (controller) still needs it for THIS
     // one response. A record return type carries both without polluting the
     // entity's own persisted shape.
-    public record PaymentInitiationOutcome(Payment payment, String redirectUrl) {
+    public record PaymentInitiationOutcome(
+            Payment payment,
+            String redirectUrl,
+            String redirectMethod,
+            java.util.Map<String, String> redirectFields
+    ) {
     }
 
     @Transactional
@@ -70,7 +75,7 @@ public class PaymentService {
             // On a retry, there's no fresh redirectUrl to give (the original
             // gateway call already happened) — null is correct here, the
             // client already has/used the original one from the first response.
-            return new PaymentInitiationOutcome(existing, null);
+            return new PaymentInitiationOutcome(existing, null, null, java.util.Map.of());
         }
 
         Order order = orderRepository.findById(orderId)
@@ -106,7 +111,8 @@ public class PaymentService {
         Payment saved = paymentRepository.save(payment);
         log.info("Payment initiated: paymentId={}, orderId={}, gateway={}, amount={} {}",
                 saved.getId(), order.getId(), gatewayType, saved.getAmount(), saved.getCurrency());
-        return new PaymentInitiationOutcome(saved, result.redirectUrl());
+        return new PaymentInitiationOutcome(saved, result.redirectUrl(),
+                result.redirectMethod(), result.redirectFields());
     }
 
     /**
@@ -142,7 +148,17 @@ public class PaymentService {
         }
 
         PaymentGateway gateway = gatewayFactory.getGateway(payment.getGateway());
-        PaymentGateway.PaymentVerificationResult result = gateway.verify(payment.getGatewayReference());
+        PaymentGateway.PaymentVerificationResult result = gateway.verify(
+                payment.getGatewayReference(), payment.getAmount());
+
+        // PENDING and AMBIGUOUS are unresolved gateway states. Treating either
+        // as FAILED would let a customer start another attempt while the first
+        // one may still settle, creating a double-payment risk.
+        if (!result.terminal()) {
+            log.info("Payment remains unresolved: paymentId={}, orderId={}, gatewayStatus={}",
+                    payment.getId(), payment.getOrder().getId(), result.rawStatus());
+            return payment;
+        }
 
         // Closes gap #5 tracked in PROGRESS.md (§6, HIGH priority): never
         // trust a bare success boolean alone for a financial confirmation —

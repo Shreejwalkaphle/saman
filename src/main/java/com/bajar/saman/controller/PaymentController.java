@@ -2,9 +2,11 @@ package com.bajar.saman.controller;
 
 import com.bajar.saman.dto.InitiatePaymentRequest;
 import com.bajar.saman.dto.PaymentResponse;
+import com.bajar.saman.dto.EsewaCallbackRequest;
 import com.bajar.saman.entity.Payment;
 import com.bajar.saman.entity.User;
 import com.bajar.saman.service.PaymentService;
+import com.bajar.saman.service.EsewaPaymentCompletionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +20,12 @@ import java.util.UUID;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final EsewaPaymentCompletionService esewaCompletionService;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(PaymentService paymentService,
+                             EsewaPaymentCompletionService esewaCompletionService) {
         this.paymentService = paymentService;
+        this.esewaCompletionService = esewaCompletionService;
     }
 
     // Same Idempotency-Key header convention as OrderController.checkout() — kept
@@ -36,7 +41,8 @@ public class PaymentController {
                 user, request.orderId(), request.gateway(), idempotencyKey);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(toResponse(outcome.payment(), outcome.redirectUrl()));
+                .body(toResponse(outcome.payment(), outcome.redirectUrl(),
+                        outcome.redirectMethod(), outcome.redirectFields()));
     }
 
     /**
@@ -52,10 +58,20 @@ public class PaymentController {
             @AuthenticationPrincipal User user,
             @PathVariable UUID paymentId) {
         Payment payment = paymentService.confirmPayment(user, paymentId);
-        return ResponseEntity.ok(toResponse(payment, null));
+        return ResponseEntity.ok(toResponse(payment, null, null, java.util.Map.of()));
     }
 
-    private PaymentResponse toResponse(Payment payment, String redirectUrl) {
+    @PostMapping("/esewa/complete")
+    public ResponseEntity<PaymentResponse> completeEsewa(
+            @AuthenticationPrincipal User user,
+            @Valid @RequestBody EsewaCallbackRequest request) {
+        Payment payment = esewaCompletionService.complete(user, request.data());
+        return ResponseEntity.ok(toResponse(payment, null, null, java.util.Map.of()));
+    }
+
+    private PaymentResponse toResponse(Payment payment, String redirectUrl,
+                                       String redirectMethod,
+                                       java.util.Map<String, String> redirectFields) {
         return new PaymentResponse(
                 payment.getId(),
                 payment.getOrder().getId(),
@@ -63,7 +79,9 @@ public class PaymentController {
                 payment.getStatus().name(),
                 payment.getAmount(),
                 payment.getCurrency(),
-                redirectUrl
+                redirectUrl,
+                redirectMethod,
+                redirectFields
         );
     }
 }
