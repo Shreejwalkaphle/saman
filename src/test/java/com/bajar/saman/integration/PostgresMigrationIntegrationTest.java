@@ -36,7 +36,7 @@ class PostgresMigrationIntegrationTest {
                 .locations("classpath:db/migration")
                 .load();
 
-        assertEquals(21, flyway.migrate().migrationsExecuted,
+        assertEquals(22, flyway.migrate().migrationsExecuted,
                 "A clean PostgreSQL database must apply the complete migration chain");
         assertEquals(0, flyway.migrate().migrationsExecuted,
                 "Re-running Flyway against the same schema must be idempotent");
@@ -45,7 +45,7 @@ class PostgresMigrationIntegrationTest {
     @Test
     void migrationChainCreatesCurrentShopSchema() throws SQLException {
         try (Connection connection = connection()) {
-            assertEquals("21", scalar(connection,
+            assertEquals("22", scalar(connection,
                     "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1"));
             assertEquals("NO", scalar(connection,
                     "SELECT is_nullable FROM information_schema.columns " +
