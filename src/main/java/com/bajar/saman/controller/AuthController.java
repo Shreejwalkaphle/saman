@@ -3,11 +3,12 @@ package com.bajar.saman.controller;
 import com.bajar.saman.dto.AuthResponse;
 import com.bajar.saman.dto.LoginRequest;
 import com.bajar.saman.dto.RegisterRequest;
+import com.bajar.saman.dto.RefreshTokenRequest;
 import com.bajar.saman.entity.User;
 import com.bajar.saman.repository.UserRoleRepository;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import com.bajar.saman.security.JwtService;
 import com.bajar.saman.service.AuthenticationService;
+import com.bajar.saman.service.RefreshSessionService;
 import com.bajar.saman.service.UserRegistrationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -29,17 +30,17 @@ public class AuthController {
 
     private final UserRegistrationService registrationService;
     private final AuthenticationService authenticationService;
-    private final JwtService jwtService;
+    private final RefreshSessionService refreshSessionService;
     private final UserRoleRepository userRoleRepository;
 
     public AuthController(
             UserRegistrationService registrationService,
             AuthenticationService authenticationService,
-            JwtService jwtService,
+            RefreshSessionService refreshSessionService,
             UserRoleRepository userRoleRepository) {
         this.registrationService = registrationService;
         this.authenticationService = authenticationService;
-        this.jwtService = jwtService;
+        this.refreshSessionService = refreshSessionService;
         this.userRoleRepository = userRoleRepository;
     }
 
@@ -60,8 +61,7 @@ public class AuthController {
         // instead we generate the token directly here, the same way login does
         // internally, so a newly registered user is immediately logged in without a
         // separate login call.
-        String token = jwtService.generateToken(user.getId(), user.getEmail());
-        AuthResponse response = new AuthResponse(token, user.getId(), user.getEmail());
+        AuthResponse response = refreshSessionService.issue(user);
 
         // 201 Created is the HTTP-correct status for "a new resource was created" —
         // NOT 200 OK, which implies an existing resource was just read/returned.
@@ -75,6 +75,17 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authenticationService.login(request.email(), request.password());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(refreshSessionService.rotate(request.refreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshTokenRequest request) {
+        refreshSessionService.revoke(request.refreshToken());
+        return ResponseEntity.noContent().build();
     }
 
     /**

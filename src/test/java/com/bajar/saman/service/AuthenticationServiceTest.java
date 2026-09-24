@@ -4,7 +4,6 @@ import com.bajar.saman.dto.AuthResponse;
 import com.bajar.saman.entity.User;
 import com.bajar.saman.exception.InvalidCredentialsException;
 import com.bajar.saman.repository.UserRepository;
-import com.bajar.saman.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +44,7 @@ class AuthenticationServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
-    private JwtService jwtService;
+    private RefreshSessionService refreshSessionService;
 
     @Mock
     private LoginAttemptService loginAttemptService;
@@ -82,8 +81,9 @@ class AuthenticationServiceTest {
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(rawPassword, testUser.getPasswordHash()))
                 .thenReturn(true);
-        when(jwtService.generateToken(any(), any()))
-                .thenReturn("fake-jwt-token");
+        when(refreshSessionService.issue(testUser))
+                .thenReturn(new AuthResponse("fake-jwt-token", null,
+                        testUser.getEmail(), "refresh-token", 900));
 
         // ACT
         AuthResponse response = authenticationService.login(
@@ -179,12 +179,27 @@ class AuthenticationServiceTest {
         when(userRepository.findByEmail("shreejwaltest@example.com"))
                 .thenReturn(Optional.of(testUser));
         when(passwordEncoder.matches(any(), any())).thenReturn(true);
-        when(jwtService.generateToken(any(), any())).thenReturn("fake-jwt-token");
+        when(refreshSessionService.issue(testUser))
+                .thenReturn(new AuthResponse("fake-jwt-token", null,
+                        testUser.getEmail(), "refresh-token", 900));
 
         AuthResponse response = authenticationService.login(
                 "ShreejwalTest@Example.com", "password123");
 
         assertThat(response.email()).isEqualTo("shreejwaltest@example.com");
         verify(userRepository).findByEmail("shreejwaltest@example.com");
+    }
+
+    @Test
+    void login_withInactiveAccount_rejectsBeforeCheckingPassword() {
+        testUser.setActive(false);
+        when(userRepository.findByEmail("shreejwaltest@example.com"))
+                .thenReturn(Optional.of(testUser));
+
+        assertThatThrownBy(() ->
+                authenticationService.login("shreejwaltest@example.com", "password123")
+        ).isInstanceOf(InvalidCredentialsException.class);
+
+        verifyNoInteractions(passwordEncoder, refreshSessionService);
     }
 }

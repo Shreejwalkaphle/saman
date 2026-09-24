@@ -67,9 +67,9 @@ public class GlobalExceptionHandler {
     }
 
     // Wrong email/password on login -> 401 Unauthorized.
-    @ExceptionHandler(InvalidCredentialsException.class)
+    @ExceptionHandler({InvalidCredentialsException.class, InvalidRefreshTokenException.class})
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(
-            InvalidCredentialsException ex, HttpServletRequest request) {
+            RuntimeException ex, HttpServletRequest request) {
         return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 

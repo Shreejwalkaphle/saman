@@ -52,6 +52,10 @@ public class JwtService {
         }
     }
 
+    public long getExpirationSeconds() {
+        return expirationMs / 1000;
+    }
+
     private Claims parseClaims(String token) {
         return Jwts.parser()
                 .verifyWith(signingKey)

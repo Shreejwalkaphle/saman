@@ -77,7 +77,8 @@ public class SecurityConfig {
                         // the entire `/api/auth/**` tree allowed an anonymous request
                         // to reach AuthController with a null principal and return 500.
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
-                                "/api/auth/login", "/api/auth/register").permitAll()
+                                "/api/auth/login", "/api/auth/register",
+                                "/api/auth/refresh", "/api/auth/logout").permitAll()
                         // These read endpoints expose account/shop management data.
                         // Declare them before the public catalog wildcards below so
                         // anonymous callers fail in the filter chain with 401.

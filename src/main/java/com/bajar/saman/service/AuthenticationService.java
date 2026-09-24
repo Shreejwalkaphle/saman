@@ -4,7 +4,6 @@ import com.bajar.saman.dto.AuthResponse;
 import com.bajar.saman.entity.User;
 import com.bajar.saman.exception.InvalidCredentialsException;
 import com.bajar.saman.repository.UserRepository;
-import com.bajar.saman.security.JwtService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,18 +31,18 @@ public class AuthenticationService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
+    private final RefreshSessionService refreshSessionService;
     private final LoginAttemptService loginAttemptService;
 
 
     public AuthenticationService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService,
+            RefreshSessionService refreshSessionService,
             LoginAttemptService loginAttemptService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
+        this.refreshSessionService = refreshSessionService;
         this.loginAttemptService = loginAttemptService;
 
     }
@@ -71,6 +70,10 @@ public class AuthenticationService {
         // that exception's own comment.
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(InvalidCredentialsException::new);
+
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException();
+        }
 
         // Account lockout check (this column existed since V2 migration, we're now
         // actually USING it). If an admin or our own brute-force protection locked
@@ -106,8 +109,6 @@ public class AuthenticationService {
         // for the Single Responsibility reason noted in LoginAttemptService.
         loginAttemptService.recordSuccessfulLogin(user);
 
-        String token = jwtService.generateToken(user.getId(), user.getEmail());
-
-        return new AuthResponse(token, user.getId(), user.getEmail());
+        return refreshSessionService.issue(user);
     }
 }
